@@ -204,14 +204,79 @@ realistic value that sanity-checks the whole fetch path.
 - *Why fetch 7 `past_days` when you only need the latest hour?* → Lag & rolling
   features for the newest rows need recent history to be computed correctly.
 
-### 7.3 Task 1.2 — AQI Computation *(in progress — student implementing)*
-> To be documented after implementation: EPA breakpoint table, piecewise-linear
-> sub-index formula, max-aggregation, unit-conversion caveat for gases, and how
-> our value cross-checks against Open-Meteo's `us_aqi`.
+### 7.3 Task 1.2 — AQI Computation (`src/aqi/data/aqi.py`) ✅
 
-### 7.4 Task 1.3 — Feature Engineering *(pending)*
-> Time features + cyclical encoding, lag features, rolling stats, AQI change
-> rate, wind u/v decomposition, and the **target-leakage `.shift()`** discipline.
+**What it does:** computes the US EPA AQI from pollutant concentrations, provides
+the 6 health categories, and a `is_hazardous()` check for alerts.
+
+**The formula (know it cold):** for a reading `C` in concentration bin
+`[C_lo, C_hi]` mapping to index bin `[I_lo, I_hi]`:
+> AQI = (I_hi − I_lo) / (C_hi − C_lo) × (C − C_lo) + I_lo
+
+Each pollutant → a sub-index; **overall AQI = MAX of sub-indices** (the worst
+pollutant defines air quality, because health risk follows the worst offender).
+
+**⭐ The bug story (tell this in the interview):** My first version computed AQI
+across *all* pollutants and returned **500 (Hazardous)** when PM2.5 was only
+~48 µg/m³ and Open-Meteo said ~85. Cross-checking against Open-Meteo's `us_aqi`
+exposed it. **Root cause:** Open-Meteo reports **CO in µg/m³**, but my CO
+breakpoint table was in **mg/m³** (max 57.5) — urban CO (~300 µg/m³) blew past
+it and hit the "above top breakpoint → 500" cap. **A unit-mismatch bug.**
+**Fix:** compute AQI from **PM2.5 + PM10 only** (units we trust); gas tables
+kept for reference but excluded (`POLLUTANTS_FOR_AQI`), with proper gas unit
+conversion listed as a documented future improvement.
+> *Lesson: always cross-validate a computation against an independent source.*
+
+**Second subtlety (not a bug):** even after the fix, our value (~130) sits above
+Open-Meteo's (~85) for the same hour. Reason: EPA's PM2.5 AQI uses a **24-hour
+average**; we use the *instantaneous hourly* value, which runs hotter. Because we
+use Open-Meteo's properly-averaged `us_aqi` as the actual model **target**, our
+`compute_aqi` is only for labels/education — so this is acceptable and documented.
+
+**Interview Q&A:**
+- *Why is overall AQI the max, not the mean?* → Health risk is driven by the
+  single worst pollutant; averaging would hide a dangerous spike.
+- *Why did your AQI read 500?* → Unit mismatch on CO (µg/m³ vs mg/m³); found via
+  cross-check; fixed by restricting to trusted PM units.
+- *Why not just use Open-Meteo's us_aqi and skip your own?* → We do use it as the
+  target; computing our own documents what the number means, powers category
+  labels/alerts, and lets us turn *predicted concentrations* into an AQI.
+
+### 7.4 Task 1.3 — Feature Engineering (`src/aqi/features/engineering.py`) ✅
+
+**What it does:** turns 19 raw columns into **72 features**. Groups:
+- **Time:** hour, day, month, day-of-week, day-of-year, is_weekend.
+- **Cyclical (sin/cos):** hour, month, day-of-week encoded on a circle so 23:00 ≈
+  00:00. *Why:* a raw 0–23 hour tells the model 23 and 0 are 23 apart when they're
+  adjacent; sin/cos fixes that.
+- **Wind vectors (u/v):** decompose speed+direction into east-west / north-south
+  components. *Why:* direction is circular (359° ≈ 1°); u/v makes wind linear-friendly.
+- **Lag features:** AQI/PM2.5/PM10 at 1, 3, 6, 12, 24 h ago. *Why:* air quality is
+  autocorrelated — the recent past predicts the near future.
+- **Rolling stats:** 6h & 24h mean/std/max. *Why:* summarise recent trend & volatility.
+- **AQI change rate:** `diff` and relative change — pollution momentum (brief-required).
+
+**⭐ THE key concept — target leakage:** every rolling window is `.shift(1)`-ed so
+it ends at the *previous* hour and never includes the current row. Without this,
+a "feature" would contain the answer, giving fake-great test scores that collapse
+in production. **This is the single most important detail in the whole pipeline.**
+
+**Design choices:**
+- **Target = Open-Meteo `us_aqi`** (properly averaged), falling back to our
+  `compute_aqi` only where missing.
+- **Primary key = epoch-seconds `timestamp`**, computed with a version-robust
+  `(dt - epoch) // 1s` (plain `.astype(int64)` on datetimes is deprecated in
+  pandas 3.x).
+- NaNs in lag/rolling columns appear only at the very start of the series
+  (e.g. 24 NaNs for the 24h lag) — expected and correct.
+
+**Interview Q&A:**
+- *What is target leakage and how did you prevent it?* → A feature containing
+  current/future info; prevented by `.shift(1)` on all rolling/lag features.
+- *Why sin/cos for hour?* → To represent periodicity; 23:00 and 00:00 become adjacent.
+- *Why decompose wind into u/v?* → Direction is circular; components are linear and
+  physically meaningful (which way pollutants are pushed).
+- *Why lag features at all?* → AQI is autocorrelated; yesterday strongly predicts today.
 
 ### 7.5 Task 1.4 — Storing to Hopsworks *(pending)*
 > Feature group, primary key `(city, timestamp)`, event time, upsert/idempotency,
