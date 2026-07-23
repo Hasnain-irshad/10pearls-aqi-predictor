@@ -1,0 +1,8 @@
+# ============================================================
+#  Local development tooling (not needed in CI or on the app).
+# ============================================================
+-r requirements.txt
+jupyter>=1.0
+ipykernel>=6.29
+pytest>=8.0
+ruff>=0.3
