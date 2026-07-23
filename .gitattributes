@@ -1,0 +1,17 @@
+# Normalize line endings: keep LF in the repo, check out native locally.
+* text=auto eol=lf
+
+# Windows scripts stay CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files — never touch
+*.pdf binary
+*.png binary
+*.jpg binary
+*.parquet binary
+*.pkl binary
+*.joblib binary
+*.h5 binary
+*.keras binary
+*.ipynb -text
