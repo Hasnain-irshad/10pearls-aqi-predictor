@@ -1,0 +1,6 @@
+# ============================================================
+#  Extra dependencies for deep-learning models (Module 5).
+#  Installed on top of requirements.txt when training the LSTM.
+#  TensorFlow CPU build — works on Windows + GitHub Actions (Python 3.11).
+# ============================================================
+tensorflow>=2.15,<2.17
