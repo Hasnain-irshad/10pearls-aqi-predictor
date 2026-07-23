@@ -1,0 +1,294 @@
+# 🎤 Pearls AQI Predictor — Interview Preparation & Project Documentation
+
+> **Purpose.** This is the master study document for defending the AQI Predictor
+> project in interviews. It captures **every module** — the *what*, the *why*,
+> the trade-offs, the code decisions, and likely interview questions.
+> It is updated after each module so nothing is left out.
+>
+> **How to build the PDF** (at the end): see [Appendix A](#appendix-a--building-the-pdf).
+
+**Project:** Pearls AQI Predictor · **Intern:** Hasnain Irshad · **Org:** 10Pearls
+**City forecast:** Lahore, Pakistan · **Horizon:** next 3 days
+
+---
+
+## 📑 Table of Contents
+1. [30-Second Elevator Pitch](#1-30-second-elevator-pitch)
+2. [The Problem & Why It Matters](#2-the-problem--why-it-matters)
+3. [System Architecture](#3-system-architecture)
+4. [Tech Stack — Every Choice Justified](#4-tech-stack--every-choice-justified)
+5. [Core Concepts Glossary](#5-core-concepts-glossary)
+6. [Module 0 — Foundation & Project Setup](#6-module-0--foundation--project-setup)
+7. [Module 1 — Feature Pipeline](#7-module-1--feature-pipeline)
+8. [Module 2 — Historical Backfill](#8-module-2--historical-backfill) *(pending)*
+9. [Module 3 — Exploratory Data Analysis](#9-module-3--eda) *(pending)*
+10. [Module 4 — Training Pipeline](#10-module-4--training-pipeline) *(pending)*
+11. [Module 5 — Deep Learning Model](#11-module-5--deep-learning) *(pending)*
+12. [Module 6 — Explainability (SHAP)](#12-module-6--shap) *(pending)*
+13. [Module 7 — Dashboard](#13-module-7--dashboard) *(pending)*
+14. [Module 8 — Alerts](#14-module-8--alerts) *(pending)*
+15. [CI/CD Automation](#15-cicd-automation) *(pending)*
+16. [General / Behavioral Interview Questions](#16-general--behavioral-questions)
+17. [Appendix A — Building the PDF](#appendix-a--building-the-pdf)
+
+---
+
+## 1. 30-Second Elevator Pitch
+
+> "I built an end-to-end, fully serverless machine-learning system that forecasts
+> Lahore's Air Quality Index three days ahead. It automatically collects weather
+> and pollution data every hour, engineers features into a feature store, retrains
+> models daily, and serves live forecasts through a public dashboard — all running
+> on free infrastructure (GitHub Actions + Hopsworks + Streamlit) with no server to
+> manage. I compared statistical, tree-based, and deep-learning models, explained
+> predictions with SHAP, and added health alerts for hazardous days."
+
+**Why this pitch works:** it names the impact (health), the scope (end-to-end),
+the engineering maturity (serverless, automated, explainable), and the rigor
+(multiple model families).
+
+---
+
+## 2. The Problem & Why It Matters
+
+- Lahore is repeatedly ranked among the **most polluted cities on Earth**; AQI
+  regularly exceeds 150–200 (Unhealthy) and spikes far higher in winter smog.
+- A 3-day forecast lets residents — especially children, elderly, and people with
+  respiratory conditions — **plan ahead** (mask up, limit outdoor exertion).
+- **ML framing:** this is a **time-series regression / forecasting** problem —
+  predict a continuous AQI value at future time steps from weather + pollution
+  history and calendar features.
+
+---
+
+## 3. System Architecture
+
+```
+ ┌──────────────┐   hourly    ┌──────────────────┐        ┌─────────────────────┐
+ │ Open-Meteo   │────────────▶│ FEATURE PIPELINE │───────▶│  Hopsworks          │
+ │ weather +    │  raw data   │ fetch→compute→   │features│  Feature Store      │
+ │ pollutants   │             │ store            │        │  (single source of  │
+ └──────────────┘             └──────────────────┘        │   truth)            │
+                                                          │        │            │
+                              ┌──────────────────┐  daily │        ▼            │
+                              │ TRAINING PIPELINE │◀───────┤  features + targets │
+                              │ train→evaluate→   │        │                     │
+                              │ register best     │───────▶│  Model Registry     │
+                              └──────────────────┘  model  └─────────┬───────────┘
+                                                                     │ model + features
+                                                                     ▼
+                                                          ┌─────────────────────┐
+                                                          │  Streamlit Dashboard │
+                                                          │  live + 3-day AQI,   │
+                                                          │  SHAP, alerts        │
+                                                          └─────────────────────┘
+```
+
+**The four pipelines (memorize this):**
+1. **Feature pipeline** (hourly) — turns raw API data into stored features.
+2. **Backfill** (one-off) — populates history so we have training data.
+3. **Training pipeline** (daily) — trains, evaluates, registers the best model.
+4. **Inference/app** (on demand) — loads model + features, shows forecasts.
+
+**Why decouple them?** Each can run, fail, and scale independently. The feature
+store is the clean interface between them — no pipeline needs to know how another
+works. This is the "**FTI (Feature/Training/Inference) architecture**."
+
+---
+
+## 4. Tech Stack — Every Choice Justified
+
+| Component | Choice | Why this one | Alternatives & trade-off |
+|-----------|--------|--------------|--------------------------|
+| **Data API** | Open-Meteo | Free, **no API key**, gives history **+** forecast for weather & air quality | AQICN/OpenWeather need keys (secret management); some cap history |
+| **Feature Store** | Hopsworks | Free tier, purpose-built for serverless ML, includes Model Registry | Vertex AI (needs GCP billing, heavier); plain CSV (no versioning/upsert) |
+| **Orchestration** | GitHub Actions | Truly serverless, free, version-controlled, visible run history | Airflow (needs a server to host — not serverless); cron on a VM (not free) |
+| **Classical ML** | scikit-learn + XGBoost | Industry standard; XGBoost strong on tabular | LightGBM (similar); pure statsmodels (weaker on many features) |
+| **Deep Learning** | TensorFlow (LSTM) | Handles temporal sequences; required by brief | PyTorch (equally valid); Prophet (statistical, less flexible) |
+| **Explainability** | SHAP | Game-theoretic, model-agnostic, rich plots | LIME (local only, less consistent) |
+| **Dashboard** | Streamlit | Pure-Python, fast to build, free public hosting | Gradio (ML-demo focused); Flask/Dash (more code) |
+| **Language/Env** | Python 3.11 + conda | 3.11 = best compatibility for TF + Hopsworks | 3.13 too new (TF/Hopsworks lag) |
+
+> **Interview line:** *"Every tool was chosen so the whole system stays free and
+> serverless — the brief asked for a 100% serverless stack, and I can point to
+> exactly where each requirement is satisfied."*
+
+---
+
+## 5. Core Concepts Glossary
+
+Concepts an interviewer will probe. Be able to explain each in one or two sentences.
+
+| Concept | Explanation |
+|---------|-------------|
+| **AQI (Air Quality Index)** | A 0–500 index *computed* from pollutant concentrations. Each pollutant → a sub-index via a piecewise-linear formula; overall AQI = **max** of sub-indices (worst pollutant wins, because health risk is driven by the worst one). |
+| **Feature** | A model input derived from raw data (e.g. "24-hour rolling mean PM2.5"). |
+| **Target / label** | What we predict (future AQI). |
+| **Feature Store** | A versioned database of features that is the single source of truth for both training and serving — prevents **train/serve skew**. |
+| **Train/serve skew** | When features are computed differently in training vs production, silently degrading the live model. A feature store eliminates it. |
+| **Target leakage** | When a feature accidentally contains information from the future/target, making test scores look great but production fail. Fixed by `.shift()`-ing lag/rolling features so they only use past rows. |
+| **Cyclical encoding** | Encoding periodic features (hour, month) as `(sin, cos)` so the model knows hour 23 ≈ hour 0 (they're adjacent on a circle). |
+| **Lag feature** | A past value of a series (AQI 24h ago) used to predict the present/future — leverages autocorrelation. |
+| **Rolling feature** | A statistic over a moving window (24h mean/std), capturing recent trend. |
+| **Walk-forward validation** | Time-series-correct evaluation: always train on the past, test on the future. Never a random split (that leaks the future). |
+| **Idempotency** | Re-running the pipeline produces the same result (no duplicate rows) — achieved via **upsert** on a primary key. |
+| **Model Registry** | Versioned store of trained models + their metrics, so the app always loads the current best. |
+| **Baseline model** | A trivial model (e.g. "tomorrow = today", persistence) that real models must beat to justify their complexity. |
+
+---
+
+## 6. Module 0 — Foundation & Project Setup
+
+**Goal:** a professional, reproducible repository.
+
+**What was built:**
+- `src/` layout with an installable `aqi` package (`pip install -e .`) → clean
+  imports (`from aqi.config import LOCATION`) in local, CI, and the app.
+- **Split requirements** (`requirements.txt` core / `-app` / `-dl` / `-dev`) so
+  the hourly CI job doesn't waste minutes installing TensorFlow it doesn't need.
+- Secrets via `.env` (gitignored) locally and **GitHub Secrets** in CI — never
+  committed.
+- `.gitignore`, `.gitattributes` (LF/CRLF normalization), MIT `LICENSE`,
+  `pyproject.toml`, architecture-rich `README.md`.
+- Central `config.py` — one source of truth for city coordinates, Hopsworks
+  names, and forecast horizon.
+
+**Why it matters for scoring:** reviewers skim. A clean, engineered structure
+signals "software engineer," not "notebook hacker," before they read any ML code.
+
+**Interview Q&A:**
+- *Why a `src/` layout + editable install?* → Guarantees the same import path
+  everywhere; avoids fragile `sys.path` hacks; makes the code a real package.
+- *Why split requirements?* → Faster, cheaper CI; the app image stays small.
+- *How do you handle secrets?* → `.env` locally (gitignored), GitHub Secrets in
+  CI, injected as environment variables at runtime. Nothing sensitive in git.
+
+---
+
+## 7. Module 1 — Feature Pipeline
+
+**Goal:** raw API data → engineered features → feature store, hourly & automated.
+
+### 7.1 The three jobs
+1. **Fetch** raw weather + pollutant data (Task 1.1).
+2. **Compute** AQI target + features (Tasks 1.2–1.3).
+3. **Store** in Hopsworks (Task 1.4).
+
+### 7.2 Task 1.1 — Fetching (`src/aqi/data/openmeteo.py`) ✅
+
+**What it does:** `fetch_air_quality()` calls Open-Meteo's air-quality endpoint
+for Lahore and returns a tidy hourly DataFrame (PM2.5, PM10, CO, NO₂, SO₂, O₃,
+plus Open-Meteo's own `us_aqi`).
+
+**Five design decisions (be ready to defend each):**
+1. **Coordinates from `config.py`, not hardcoded** — DRY; extending to another
+   city is a one-line change.
+2. **Retry-resilient HTTP session** (`Retry` + exponential backoff on
+   429/5xx) — the job runs unattended hourly; a transient blip must not crash it.
+   *This is the production-maturity signal most interns miss.*
+3. **`raise_for_status()`** — fail fast and loud at the source of the error,
+   not with a confusing `KeyError` later.
+4. **Defensive parsing** — verify `hourly.time` exists before trusting the
+   response; never assume an external API's shape.
+5. **Explicit `timezone=Asia/Karachi`** — returns Lahore local time. Forgetting
+   this silently returns UTC and shifts every hour-of-day feature by 5 hours —
+   a subtle, model-wrecking bug.
+
+**Verified live:** 72 rows fetched for Lahore; AQI ≈ 171–172 (Unhealthy) — a
+realistic value that sanity-checks the whole fetch path.
+
+**Interview Q&A:**
+- *Why Open-Meteo over AQICN/OpenWeather?* → Free, keyless, history + forecast.
+- *What if the API is down during the hourly run?* → Retries with backoff; if it
+  still fails, the job errors and GitHub flags a red run (observability).
+- *Why fetch 7 `past_days` when you only need the latest hour?* → Lag & rolling
+  features for the newest rows need recent history to be computed correctly.
+
+### 7.3 Task 1.2 — AQI Computation *(in progress — student implementing)*
+> To be documented after implementation: EPA breakpoint table, piecewise-linear
+> sub-index formula, max-aggregation, unit-conversion caveat for gases, and how
+> our value cross-checks against Open-Meteo's `us_aqi`.
+
+### 7.4 Task 1.3 — Feature Engineering *(pending)*
+> Time features + cyclical encoding, lag features, rolling stats, AQI change
+> rate, wind u/v decomposition, and the **target-leakage `.shift()`** discipline.
+
+### 7.5 Task 1.4 — Storing to Hopsworks *(pending)*
+> Feature group, primary key `(city, timestamp)`, event time, upsert/idempotency,
+> and the Windows `twofish` build issue + chosen workaround.
+
+---
+
+## 8. Module 2 — Historical Backfill
+*(pending — populated when the module is done)*
+> Will cover: why we backfill (need history to train), chunked fetching of the
+> archive endpoints, building features on a contiguous series so lags are correct,
+> and one-shot bulk insert.
+
+## 9. Module 3 — EDA
+*(pending)*
+> Will cover: seasonality (winter smog), pollutant correlations, AQI distribution,
+> missing-data handling, and the key visual insights that motivate feature choices.
+
+## 10. Module 4 — Training Pipeline
+*(pending)*
+> Will cover: walk-forward validation, baseline vs Ridge vs RandomForest vs
+> XGBoost, RMSE/MAE/R² (and what each means), hyperparameter tuning, and model
+> registration.
+
+## 11. Module 5 — Deep Learning
+*(pending)*
+> Will cover: why/when LSTM helps on sequences, windowing, scaling, and a fair
+> comparison against the tree models.
+
+## 12. Module 6 — SHAP
+*(pending)*
+> Will cover: Shapley values intuition, global vs local explanations, and which
+> features drive Lahore's AQI.
+
+## 13. Module 7 — Dashboard
+*(pending)*
+> Will cover: loading model + features, computing live predictions, UX, and
+> deployment to Streamlit Cloud.
+
+## 14. Module 8 — Alerts
+*(pending)*
+> Will cover: hazardous-threshold logic and notification delivery.
+
+## 15. CI/CD Automation
+*(pending)*
+> Will cover: hourly feature + daily training GitHub Actions, secrets, schedules
+> (cron), concurrency, and how the green badges *prove* the system is live.
+
+---
+
+## 16. General / Behavioral Questions
+
+- **"Walk me through your project."** → Use the architecture diagram: four
+  pipelines, feature store as the interface, all serverless.
+- **"What was the hardest part?"** → (fill in a real one, e.g. the Windows
+  Hopsworks build issue, or getting time-series validation right).
+- **"What would you improve with more time?"** → Gas-pollutant unit conversion,
+  more cities, probabilistic forecasts (prediction intervals), better DL tuning.
+- **"How do you know your model is any good?"** → It beats a persistence baseline
+  on walk-forward RMSE/MAE; metrics are logged in the Model Registry.
+- **"How is this different from a Kaggle notebook?"** → It's automated,
+  serverless, and live in production — it keeps working after I close my laptop.
+- **"Why should we trust the predictions?"** → SHAP explains every one; alerts
+  fire on hazardous days; the pipeline is observable via GitHub run history.
+
+---
+
+## Appendix A — Building the PDF
+
+When the document is complete, convert Markdown → PDF with any of:
+
+- **Pandoc** (best quality): `pandoc docs/interview-prep.md -o interview-prep.pdf`
+  (needs a LaTeX engine like MiKTeX).
+- **VS Code**: install the "Markdown PDF" extension → right-click → *Export (pdf)*.
+- **Browser**: open a rendered Markdown preview → Print → *Save as PDF*.
+
+---
+
+*This document is a living artifact — updated after every module so it is
+interview-ready and doubles as the source for the final project report.*
