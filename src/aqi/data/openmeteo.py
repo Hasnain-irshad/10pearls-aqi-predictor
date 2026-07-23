@@ -21,8 +21,9 @@ from aqi.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-# The Open-Meteo air-quality endpoint (separate from the weather endpoint).
+# Open-Meteo has two separate endpoints — one for air quality, one for weather.
 AIR_QUALITY_URL = "https://air-quality-api.open-meteo.com/v1/air-quality"
+WEATHER_URL = "https://api.open-meteo.com/v1/forecast"
 
 # The hourly pollutant variables we ask for. `us_aqi` is Open-Meteo's own
 # pre-computed US AQI — handy to cross-check our own calculation later.
@@ -34,6 +35,22 @@ AIR_QUALITY_VARS: tuple[str, ...] = (
     "sulphur_dioxide",
     "ozone",
     "us_aqi",
+)
+
+# Weather variables. Weather drives pollution dispersion — wind clears pollutants,
+# temperature inversions trap them, rain washes them out — so these are among the
+# most predictive features for AQI.
+WEATHER_VARS: tuple[str, ...] = (
+    "temperature_2m",
+    "relative_humidity_2m",
+    "dew_point_2m",
+    "apparent_temperature",
+    "precipitation",
+    "surface_pressure",
+    "cloud_cover",
+    "wind_speed_10m",
+    "wind_direction_10m",
+    "wind_gusts_10m",
 )
 
 
@@ -55,32 +72,21 @@ def _session(retries: int = 4, backoff: float = 1.5) -> requests.Session:
     return session
 
 
-def fetch_air_quality(
+def _fetch_hourly(
+    url: str,
     *,
-    latitude: float = LOCATION.latitude,
-    longitude: float = LOCATION.longitude,
-    timezone: str = LOCATION.timezone,
-    variables: Sequence[str] = AIR_QUALITY_VARS,
-    past_days: int = 7,
-    forecast_days: int = 0,
+    latitude: float,
+    longitude: float,
+    timezone: str,
+    variables: Sequence[str],
+    past_days: int,
+    forecast_days: int,
 ) -> pd.DataFrame:
-    """Fetch hourly air-quality data and return it as a tidy DataFrame.
+    """Shared helper: call an Open-Meteo endpoint and return a tidy hourly frame.
 
-    Parameters
-    ----------
-    latitude, longitude, timezone
-        Location to query. Defaults come from ``aqi.config.LOCATION`` (Lahore),
-        so we never hardcode coordinates in more than one place.
-    past_days
-        How many days of recent history to include (the hourly pipeline pulls a
-        few so lag/rolling features have enough context downstream).
-    forecast_days
-        How many days of forecast to include (0 for now; used later for
-        prediction inputs).
-
-    Returns
-    -------
-    DataFrame with a ``datetime`` column and one column per requested variable.
+    Both the air-quality and weather endpoints share the same request shape and
+    the same ``{"hourly": {"time": [...], var: [...]}}`` response shape, so this
+    one function serves both (DRY).
     """
     params = {
         "latitude": latitude,
@@ -90,30 +96,79 @@ def fetch_air_quality(
         "past_days": past_days,
         "forecast_days": forecast_days,
     }
-
-    logger.info("Fetching air quality for (%.4f, %.4f), past_days=%d", latitude, longitude, past_days)
-    response = _session().get(AIR_QUALITY_URL, params=params, timeout=60)
+    response = _session().get(url, params=params, timeout=60)
     response.raise_for_status()  # turn any HTTP error into a clear exception
     payload = response.json()
 
     # Open-Meteo nests the data under "hourly", with a parallel "time" array.
     hourly = payload.get("hourly")
     if not hourly or "time" not in hourly:
-        raise ValueError("Unexpected Open-Meteo response: missing 'hourly.time'")
+        raise ValueError(f"Unexpected Open-Meteo response from {url}: missing 'hourly.time'")
 
     df = pd.DataFrame(hourly)
     df = df.rename(columns={"time": "datetime"})
     df["datetime"] = pd.to_datetime(df["datetime"])  # string -> real timestamps
-    df = df.sort_values("datetime").reset_index(drop=True)
+    return df.sort_values("datetime").reset_index(drop=True)
 
-    logger.info("Fetched %d rows (%s -> %s)", len(df), df["datetime"].min(), df["datetime"].max())
+
+def fetch_air_quality(
+    *,
+    latitude: float = LOCATION.latitude,
+    longitude: float = LOCATION.longitude,
+    timezone: str = LOCATION.timezone,
+    variables: Sequence[str] = AIR_QUALITY_VARS,
+    past_days: int = 7,
+    forecast_days: int = 0,
+) -> pd.DataFrame:
+    """Fetch hourly air-quality data (pollutants + Open-Meteo's us_aqi)."""
+    logger.info("Fetching air quality for (%.4f, %.4f), past_days=%d", latitude, longitude, past_days)
+    df = _fetch_hourly(
+        AIR_QUALITY_URL,
+        latitude=latitude, longitude=longitude, timezone=timezone,
+        variables=variables, past_days=past_days, forecast_days=forecast_days,
+    )
+    logger.info("Air-quality: %d rows (%s -> %s)", len(df), df["datetime"].min(), df["datetime"].max())
     return df
+
+
+def fetch_weather(
+    *,
+    latitude: float = LOCATION.latitude,
+    longitude: float = LOCATION.longitude,
+    timezone: str = LOCATION.timezone,
+    variables: Sequence[str] = WEATHER_VARS,
+    past_days: int = 7,
+    forecast_days: int = 0,
+) -> pd.DataFrame:
+    """Fetch hourly weather data (temperature, wind, humidity, pressure, ...)."""
+    logger.info("Fetching weather for (%.4f, %.4f), past_days=%d", latitude, longitude, past_days)
+    df = _fetch_hourly(
+        WEATHER_URL,
+        latitude=latitude, longitude=longitude, timezone=timezone,
+        variables=variables, past_days=past_days, forecast_days=forecast_days,
+    )
+    logger.info("Weather: %d rows (%s -> %s)", len(df), df["datetime"].min(), df["datetime"].max())
+    return df
+
+
+def fetch_raw(*, past_days: int = 7, forecast_days: int = 0) -> pd.DataFrame:
+    """Fetch BOTH air quality and weather and merge them on ``datetime``.
+
+    This is the single entry point the feature pipeline uses: one tidy hourly
+    row per timestamp with every raw pollutant and weather variable.
+    """
+    aq = fetch_air_quality(past_days=past_days, forecast_days=forecast_days)
+    wx = fetch_weather(past_days=past_days, forecast_days=forecast_days)
+    merged = pd.merge(aq, wx, on="datetime", how="inner")
+    merged.insert(1, "city", LOCATION.name)
+    merged = merged.sort_values("datetime").reset_index(drop=True)
+    logger.info("Merged raw dataset: %d rows x %d cols", merged.shape[0], merged.shape[1])
+    return merged
 
 
 if __name__ == "__main__":
     # Quick manual smoke test: run `python -m aqi.data.openmeteo` and eyeball it.
-    frame = fetch_air_quality(past_days=3)
+    frame = fetch_raw(past_days=3)
     print("\nShape:", frame.shape)
     print("\nColumns:", list(frame.columns))
     print("\nHead:\n", frame.head())
-    print("\nLatest us_aqi:", frame["us_aqi"].iloc[-1])
