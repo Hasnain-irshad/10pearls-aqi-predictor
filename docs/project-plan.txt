@@ -1,0 +1,227 @@
+================================================================================
+              PEARLS AQI PREDICTOR — PROJECT PLAN & APPROACH
+================================================================================
+  10Pearls Data Science Internship
+  Intern       : Hasnain Irshad
+  City forecast: Lahore, Pakistan
+  Horizon      : Air Quality Index (AQI) for the next 3 days
+  Plan window  : Week 3 -> Week 7 (5 weeks)
+  Last updated : 2026-07-24
+================================================================================
+
+
+--------------------------------------------------------------------------------
+1. WHAT THIS PROJECT IS (IN ONE PARAGRAPH)
+--------------------------------------------------------------------------------
+The Pearls AQI Predictor is an end-to-end, 100% serverless machine-learning
+system that forecasts the Air Quality Index for Lahore three days into the
+future. It automatically collects weather and pollution data every hour,
+transforms it into model-ready features stored in a feature store, retrains
+forecasting models every day, and serves live predictions through a public web
+dashboard. The whole thing runs on free infrastructure with no server to manage
+- data collection, training, and serving are all automated.
+
+
+--------------------------------------------------------------------------------
+2. WHY IT MATTERS (THE PROBLEM)
+--------------------------------------------------------------------------------
+* Lahore is repeatedly ranked among the most polluted cities on Earth. Its AQI
+  regularly exceeds 150-200 (Unhealthy) and spikes far higher during winter smog.
+* A reliable 3-day forecast lets residents - especially children, the elderly,
+  and people with respiratory conditions - plan ahead (limit outdoor activity,
+  use masks/air purifiers).
+* In machine-learning terms this is a TIME-SERIES REGRESSION / FORECASTING
+  problem: predict a continuous AQI value at future time steps using weather +
+  pollution history and calendar features.
+
+
+--------------------------------------------------------------------------------
+3. FINAL DELIVERABLES (WHAT WE HAND IN)
+--------------------------------------------------------------------------------
+  1. An end-to-end AQI prediction system.
+  2. A scalable, automated (serverless) pipeline.
+  3. An interactive dashboard showing real-time and forecasted AQI.
+  4. A detailed report documenting everything achieved.
+  (Plus, for interview readiness: a living interview-prep document that explains
+   every module, decision, and trade-off.)
+
+
+--------------------------------------------------------------------------------
+4. HOW THE SYSTEM WORKS (ARCHITECTURE)
+--------------------------------------------------------------------------------
+The system is built as four decoupled pipelines connected through a central
+Feature Store + Model Registry. This is the well-known "FTI" (Feature / Training
+/ Inference) architecture.
+
+  Open-Meteo API            (raw weather + pollutants)
+        |
+        v   (hourly)
+  [1] FEATURE PIPELINE  ->  fetch -> compute features -> store
+        |
+        v
+  HOPSWORKS FEATURE STORE   (single source of truth for features + targets)
+        |                                   ^
+        |  (daily)                          |  features + targets
+        v                                   |
+  [2] TRAINING PIPELINE ->  train -> evaluate -> register best model
+        |
+        v
+  HOPSWORKS MODEL REGISTRY  (versioned models + their metrics)
+        |
+        v   (on demand)
+  [3] WEB APP / INFERENCE -> load model + features -> show 3-day forecast
+
+  [0] BACKFILL PIPELINE (one-off): replays the feature pipeline over 2+ years of
+      history to create the initial training dataset.
+
+WHY DECOUPLE? Each pipeline can run, fail, and scale independently. The feature
+store is the clean interface between them, so no pipeline needs to know how any
+other one works. This is what makes the system "production-grade," not just a
+notebook.
+
+
+--------------------------------------------------------------------------------
+5. TECHNOLOGY STACK (AND WHY EACH CHOICE)
+--------------------------------------------------------------------------------
+  DATA SOURCE     : Open-Meteo (Air Quality + Weather APIs)
+     Why: Free, needs NO API key, serves BOTH history and forecast. Perfect for
+     an unattended serverless pipeline (no secret to manage).
+     Alternatives: AQICN / OpenWeather (need API keys; some limit history).
+
+  FEATURE STORE   : Hopsworks (free tier)
+     Why: Purpose-built for serverless ML; includes a Model Registry; versioned
+     features prevent "train/serve skew."
+     Alternatives: Vertex AI (needs GCP billing, heavier); plain CSV (no
+     versioning, no upsert, no single source of truth).
+
+  ORCHESTRATION   : GitHub Actions
+     Why: Truly serverless, free, version-controlled, with a visible run history
+     that PROVES the automation is live.
+     Alternatives: Apache Airflow (needs a server to host - not serverless).
+
+  CLASSICAL ML    : scikit-learn + XGBoost
+     Why: Industry standard; XGBoost is very strong on tabular data.
+
+  DEEP LEARNING   : TensorFlow (LSTM)
+     Why: Handles temporal sequences; required by the brief ("statistical to
+     deep learning"). PyTorch would be equally valid.
+
+  EXPLAINABILITY  : SHAP
+     Why: Game-theoretic, model-agnostic feature-importance with rich plots.
+     Alternative: LIME (local only, less consistent).
+
+  DASHBOARD       : Streamlit (deployed on Streamlit Community Cloud)
+     Why: Pure-Python, fast to build, free public hosting.
+
+  LANGUAGE / ENV  : Python 3.11 + conda
+     Why: 3.11 has the best compatibility with TensorFlow and the Hopsworks SDK
+     (3.13 is too new for some of these libraries).
+
+  VERSION CONTROL : Git (+ GitHub)
+     Why: Professional history; also the trigger surface for GitHub Actions.
+
+
+--------------------------------------------------------------------------------
+6. OUR APPROACH (HOW WE ARE ACTUALLY DOING THIS)
+--------------------------------------------------------------------------------
+WORKING METHOD
+  * The project is built MODULE BY MODULE, in coherent chunks - not all at once.
+  * After each chunk is built, tested live, and documented, there is a pause to
+    STUDY it before moving to the next chunk. Goal: be able to defend every line
+    and design choice in the interview.
+  * Every piece of code is verified on REAL Lahore data before we move on
+    (e.g. a bug was caught by cross-checking our AQI against Open-Meteo's).
+  * Everything is documented in docs/interview-prep.md as we go, so nothing is
+    left out and the final report writes itself.
+
+ENGINEERING PRACTICES
+  * Clean, installable "src/" Python package (pip install -e .) for tidy imports
+    everywhere (local, CI, app).
+  * Secrets via a gitignored .env file locally and GitHub Secrets in CI - never
+    committed.
+  * Split requirements (core / app / deep-learning / dev) so CI stays fast.
+  * Unit tests for the tricky logic (AQI math, feature engineering).
+  * Git commits per logical unit with clear messages.
+
+KEY DATA-SCIENCE PRINCIPLES WE FOLLOW
+  * Prevent TARGET LEAKAGE: every lag/rolling feature is shifted so it only uses
+    the past, never the current/future value.
+  * Use TIME-SERIES-CORRECT evaluation (walk-forward validation), never a random
+    train/test split that would leak the future.
+  * Always compare models against a simple BASELINE (e.g. "tomorrow = today") so
+    complexity is justified by real improvement.
+  * Cross-validate computed values against an independent source.
+
+
+--------------------------------------------------------------------------------
+7. ROADMAP & MILESTONES (WITH DATES)
+--------------------------------------------------------------------------------
+WEEK 3  (Jul 23 - Jul 29)  ..... FOUNDATION + FEATURE PIPELINE
+  - Project setup: git repo, structure, Python 3.11 env, requirements, README.
+  - Module 1 Feature Pipeline:
+      * Fetch raw weather + pollutant data from Open-Meteo.
+      * Compute AQI + engineer features (time, cyclical, lags, rolling, wind).
+      * Store features in the Hopsworks Feature Store.
+  - Module 2 Backfill: load 2+ years of historical features/targets.
+  - Set up the HOURLY feature-pipeline GitHub Action.
+  MILESTONE: Feature Store filling automatically every hour.
+
+WEEK 4  (Jul 30 - Aug 5)  ...... EDA + TRAINING PIPELINE
+  - Module 3 EDA: trends, seasonality (winter smog), correlations, distributions.
+  - Module 4 Training Pipeline:
+      * Read features from the store.
+      * Walk-forward validation; compare Baseline / Ridge / RandomForest / XGBoost.
+      * Evaluate with RMSE, MAE, R2; register the best model.
+  MILESTONE: A trained, evaluated, registered model with honest metrics.
+
+WEEK 5  (Aug 6 - Aug 12)  ...... DEEP LEARNING + EXPLAINABILITY + DAILY AUTOMATION
+  - Module 5 Deep Learning: LSTM/TensorFlow forecaster, compared fairly vs trees.
+  - Module 6 SHAP: feature-importance explanations (what drives Lahore's AQI).
+  - Set up the DAILY training-pipeline GitHub Action.
+  MILESTONE: Full CI/CD (hourly features + daily retraining) + explainability.
+
+WEEK 6  (Aug 13 - Aug 19)  ..... DASHBOARD + ALERTS + DEPLOY
+  - Module 7 Streamlit dashboard: current AQI, 3-day forecast, trends,
+    explanations, health guidance.
+  - Module 8 Alerts: notifications for hazardous AQI levels.
+  - Deploy to Streamlit Community Cloud (public URL).
+  MILESTONE: A live, public dashboard anyone can open.
+
+WEEK 7  (Aug 20 - Aug 26)  ..... REPORT + POLISH + SUBMISSION
+  - Detailed report (architecture, methodology, results, screenshots, learnings).
+  - Professional README with badges, diagram, live-demo link.
+  - Code cleanup, tests, buffer for anything that slipped.
+  MILESTONE: Submission-ready, top-tier project.
+
+
+--------------------------------------------------------------------------------
+8. CURRENT PROGRESS (AS OF 2026-07-24)
+--------------------------------------------------------------------------------
+  [DONE] Module 0 - Foundation: git repo, src/ package, config, requirements,
+         README, .gitignore/.gitattributes, license, interview-prep doc.
+  [DONE] Module 1 (compute layer):
+           Task 1.1 - Fetch weather + pollutants from Open-Meteo (verified live).
+           Task 1.2 - AQI computation (verified; caught a CO unit-mismatch bug).
+           Task 1.3 - Feature engineering: 19 raw cols -> 72 features (verified).
+  [NEXT] Task 1.4 - Store features in Hopsworks (needs API key + Windows fix).
+  [TODO] Module 2 backfill, hourly automation, then Weeks 4-7 as above.
+
+  KNOWN ISSUE / RISK:
+    * Hopsworks does not pip-install on Windows out of the box (the 'twofish'
+      C-extension fails to build without a C++ compiler). Planned workarounds:
+      (a) install Microsoft C++ Build Tools, (b) run Hopsworks writes only in
+      GitHub Actions/Linux, or (c) use WSL. Decision to be made at Task 1.4.
+
+
+--------------------------------------------------------------------------------
+9. HOW TO RUN WHAT EXISTS TODAY
+--------------------------------------------------------------------------------
+  # from the project folder, in a terminal:
+  conda activate aqi
+  python -m aqi.data.openmeteo        # fetch raw merged weather + pollutants
+  python -m aqi.data.aqi              # compute AQI + cross-check vs Open-Meteo
+  python -m aqi.features.engineering  # build the 72-feature table
+
+================================================================================
+  This is a living plan and will be updated as milestones are completed.
+================================================================================
