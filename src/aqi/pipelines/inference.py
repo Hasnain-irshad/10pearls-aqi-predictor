@@ -45,7 +45,7 @@ def _interval(pred: float, h: int, bundle: ModelBundle) -> tuple[float, float]:
 
 def forecast_city(city, bundle: ModelBundle, *, horizon_hours: int = 72) -> dict:
     """Produce the hourly + daily forecast dict for one city."""
-    raw = fetch_raw(city, past_days=3, forecast_days=3)
+    raw = fetch_raw(city, past_days=3, forecast_days=4)  # 4 days ensures full 72h ahead
     feats = build_features(raw, dropna_target=False)
 
     now = pd.Timestamp.now(tz=city.timezone).tz_localize(None).floor("h")
