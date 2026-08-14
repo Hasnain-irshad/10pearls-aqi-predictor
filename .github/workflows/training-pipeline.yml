@@ -1,0 +1,52 @@
+name: Training Pipeline (daily)
+
+# Every day: retrain the global model on the latest features, run batch inference
+# to refresh the 3-day forecasts for all cities, and commit the predictions JSON
+# so the deployed dashboard reads fresh numbers.
+
+on:
+  schedule:
+    - cron: "30 2 * * *" # daily at 02:30 UTC
+  workflow_dispatch: {}
+
+concurrency:
+  group: training-pipeline
+  cancel-in-progress: false
+
+permissions:
+  contents: write # to commit refreshed predictions.json
+
+jobs:
+  train-and-infer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . -r requirements.txt
+
+      - name: Train model
+        env:
+          HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
+          HOPSWORKS_PROJECT: ${{ secrets.HOPSWORKS_PROJECT }}
+        run: python -m aqi.pipelines.training_pipeline
+
+      - name: Batch inference (refresh forecasts)
+        env:
+          HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
+          HOPSWORKS_PROJECT: ${{ secrets.HOPSWORKS_PROJECT }}
+        run: python -m aqi.pipelines.inference
+
+      - name: Commit refreshed predictions
+        run: |
+          git config user.name "aqi-bot"
+          git config user.email "aqi-bot@users.noreply.github.com"
+          git add -f data/processed/predictions.json docs/model_metrics.md
+          git commit -m "chore: refresh forecasts [skip ci]" || echo "no changes"
+          git push || echo "nothing to push"
