@@ -7,7 +7,7 @@ GitHub Actions secrets in CI) and are never hard-coded.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -30,12 +30,49 @@ def _get(name: str, default: str | None = None) -> str | None:
 
 @dataclass(frozen=True)
 class Location:
-    """The city we forecast AQI for."""
+    """A city we forecast AQI for."""
 
-    name: str = _get("CITY_NAME", "Lahore")
-    latitude: float = float(_get("LATITUDE", "31.5204"))
-    longitude: float = float(_get("LONGITUDE", "74.3587"))
-    timezone: str = _get("TIMEZONE", "Asia/Karachi")
+    name: str
+    latitude: float
+    longitude: float
+    timezone: str = "Asia/Karachi"
+
+    @property
+    def slug(self) -> str:
+        """Lowercase id used in keys/URLs, e.g. 'Lahore' -> 'lahore'."""
+        return self.name.lower().replace(" ", "_")
+
+
+# ---- The supported cities (single source of truth for the whole project) ----
+# All major Pakistani cities share the Asia/Karachi timezone. Add/remove here and
+# every pipeline, the model, and the dashboard dropdown pick it up automatically.
+CITIES: list[Location] = [
+    Location("Lahore", 31.5204, 74.3587),
+    Location("Karachi", 24.8607, 67.0011),
+    Location("Islamabad", 33.6844, 73.0479),
+    Location("Rawalpindi", 33.5651, 73.0169),
+    Location("Faisalabad", 31.4504, 73.1350),
+    Location("Multan", 30.1575, 71.5249),
+    Location("Peshawar", 34.0151, 71.5249),
+    Location("Quetta", 30.1798, 66.9750),
+    Location("Gujranwala", 32.1877, 74.1945),
+    Location("Sialkot", 32.4945, 74.5229),
+    Location("Hyderabad", 25.3960, 68.3578),
+    Location("Bahawalpur", 29.3956, 71.6836),
+]
+
+CITIES_BY_NAME: dict[str, Location] = {c.name: c for c in CITIES}
+
+# Default city (used when a single-city context needs one). Overridable via .env.
+DEFAULT_CITY_NAME = _get("CITY_NAME", "Lahore")
+
+
+def get_city(name: str) -> Location:
+    """Look up a supported city by name (case-insensitive)."""
+    for city in CITIES:
+        if city.name.lower() == name.lower():
+            return city
+    raise KeyError(f"Unknown city '{name}'. Supported: {[c.name for c in CITIES]}")
 
 
 @dataclass(frozen=True)
@@ -65,7 +102,7 @@ class ForecastConfig:
 
 
 # Singletons imported elsewhere: `from aqi.config import LOCATION, HOPSWORKS, FORECAST`
-LOCATION = Location()
+LOCATION = get_city(DEFAULT_CITY_NAME)  # the default single city (Lahore)
 HOPSWORKS = HopsworksConfig()
 FORECAST = ForecastConfig()
 
