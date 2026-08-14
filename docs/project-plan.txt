@@ -45,6 +45,18 @@ dashboard. The whole thing runs on free infrastructure with no server to manage
   (Plus, for interview readiness: a living interview-prep document that explains
    every module, decision, and trade-off.)
 
+EXTRA FEATURES WE ARE ADDING (BEYOND THE BRIEF, to aim for a top-3 finish):
+  * MULTI-CITY: a dropdown of major Pakistani cities (not just one city), served
+    by a single GLOBAL model that uses city/location as features.
+  * HOURLY-OR-DAILY toggle: forecast hourly for 72h; user can view hour-by-hour
+    or daily-average AQI for the next 3 days.
+  * PREDICTION INTERVALS: show forecast uncertainty (confidence bands), not just
+    a single line.
+  * INTERACTIVE MAP of Pakistan coloured by each city's AQI.
+  * SHAP explanations surfaced in the UI ("why is tomorrow bad?").
+  * (Stretch / under evaluation) An LLM "air-quality advisor" chatbot built on
+    the Model Context Protocol (MCP), grounded in our real model outputs.
+
 
 --------------------------------------------------------------------------------
 4. HOW THE SYSTEM WORKS (ARCHITECTURE)
@@ -110,8 +122,13 @@ notebook.
      Why: Game-theoretic, model-agnostic feature-importance with rich plots.
      Alternative: LIME (local only, less consistent).
 
-  DASHBOARD       : Streamlit (deployed on Streamlit Community Cloud)
-     Why: Pure-Python, fast to build, free public hosting.
+  WEB APP         : React frontend + FastAPI backend
+     Why: React gives a far more polished, interactive UI (maps, custom charts)
+     than Streamlit, and FastAPI satisfies the brief's "Flask/FastAPI" option.
+     Kept serverless: a daily GitHub Action PRE-COMPUTES forecasts for all cities
+     into a predictions store/JSON, and the React app just reads them (a live
+     backend is only needed for the optional LLM advisor).
+     (Streamlit remains a fast fallback if the React path runs low on time.)
 
   LANGUAGE / ENV  : Python 3.11 + conda
      Why: 3.11 has the best compatibility with TensorFlow and the Hopsworks SDK
@@ -203,6 +220,9 @@ WEEK 7  (Aug 20 - Aug 26)  ..... REPORT + POLISH + SUBMISSION
            Task 1.1 - Fetch weather + pollutants from Open-Meteo (verified live).
            Task 1.2 - AQI computation (verified; caught a CO unit-mismatch bug).
            Task 1.3 - Feature engineering: 19 raw cols -> 72 features (verified).
+  [DONE] Multi-city refactor: city registry (12 Pakistani cities), per-city fetch
+         + per-city feature building (no cross-city leakage). Verified live on
+         Lahore/Karachi/Islamabad -> 74 features per row.
   [NEXT] Task 1.4 - Store features in Hopsworks (needs API key + Windows fix).
   [TODO] Module 2 backfill, hourly automation, then Weeks 4-7 as above.
 
