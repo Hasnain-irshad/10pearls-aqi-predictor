@@ -1,0 +1,7 @@
+# ============================================================
+#  Dependencies for the FastAPI backend (serves forecasts + on-demand predict).
+#  Installs the core pipeline deps plus the web server.
+# ============================================================
+-r requirements.txt
+fastapi>=0.110
+uvicorn[standard]>=0.29
