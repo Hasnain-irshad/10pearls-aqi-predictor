@@ -21,9 +21,12 @@ from aqi.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Open-Meteo has two separate endpoints — one for air quality, one for weather.
+# Open-Meteo endpoints. Air quality handles both recent & historical in one URL.
+# Weather has TWO: the forecast URL (recent + forecast) and the ERA5 archive URL
+# (multi-year history) — we pick the archive for old date ranges (backfill).
 AIR_QUALITY_URL = "https://air-quality-api.open-meteo.com/v1/air-quality"
 WEATHER_URL = "https://api.open-meteo.com/v1/forecast"
+WEATHER_ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
 
 # The hourly pollutant variables we ask for. `us_aqi` is Open-Meteo's own
 # pre-computed US AQI — handy to cross-check our own calculation later.
@@ -79,23 +82,30 @@ def _fetch_hourly(
     longitude: float,
     timezone: str,
     variables: Sequence[str],
-    past_days: int,
-    forecast_days: int,
+    past_days: int | None = None,
+    forecast_days: int | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> pd.DataFrame:
     """Shared helper: call an Open-Meteo endpoint and return a tidy hourly frame.
 
-    Both the air-quality and weather endpoints share the same request shape and
-    the same ``{"hourly": {"time": [...], var: [...]}}`` response shape, so this
-    one function serves both (DRY).
+    Supports two modes on the same request shape:
+    * recent/forecast: pass ``past_days`` / ``forecast_days``.
+    * historical range: pass ``start_date`` / ``end_date`` (YYYY-MM-DD).
     """
-    params = {
+    params: dict = {
         "latitude": latitude,
         "longitude": longitude,
         "timezone": timezone,
         "hourly": ",".join(variables),  # API wants a comma-separated list
-        "past_days": past_days,
-        "forecast_days": forecast_days,
     }
+    if start_date:
+        params["start_date"] = start_date
+        params["end_date"] = end_date or start_date
+    else:
+        params["past_days"] = past_days if past_days is not None else 7
+        params["forecast_days"] = forecast_days if forecast_days is not None else 0
+
     response = _session().get(url, params=params, timeout=60)
     response.raise_for_status()  # turn any HTTP error into a clear exception
     payload = response.json()
@@ -117,13 +127,19 @@ def fetch_air_quality(
     variables: Sequence[str] = AIR_QUALITY_VARS,
     past_days: int = 7,
     forecast_days: int = 0,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> pd.DataFrame:
-    """Fetch hourly air-quality data (pollutants + Open-Meteo's us_aqi) for a city."""
-    logger.info("Fetching air quality for %s, past_days=%d", city.name, past_days)
+    """Fetch hourly air-quality data (pollutants + us_aqi) for a city.
+
+    Use (start_date, end_date) for history, or (past_days, forecast_days) for
+    recent + forecast. The air-quality endpoint serves both.
+    """
     df = _fetch_hourly(
         AIR_QUALITY_URL,
         latitude=city.latitude, longitude=city.longitude, timezone=city.timezone,
         variables=variables, past_days=past_days, forecast_days=forecast_days,
+        start_date=start_date, end_date=end_date,
     )
     logger.info("%s air-quality: %d rows (%s -> %s)", city.name, len(df), df["datetime"].min(), df["datetime"].max())
     return df
@@ -135,33 +151,49 @@ def fetch_weather(
     variables: Sequence[str] = WEATHER_VARS,
     past_days: int = 7,
     forecast_days: int = 0,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> pd.DataFrame:
-    """Fetch hourly weather data (temperature, wind, humidity, pressure, ...) for a city."""
-    logger.info("Fetching weather for %s, past_days=%d", city.name, past_days)
+    """Fetch hourly weather data for a city.
+
+    Historical ranges (start_date given) hit the ERA5 *archive* endpoint;
+    recent + forecast hit the forecast endpoint.
+    """
+    url = WEATHER_ARCHIVE_URL if start_date else WEATHER_URL
     df = _fetch_hourly(
-        WEATHER_URL,
+        url,
         latitude=city.latitude, longitude=city.longitude, timezone=city.timezone,
         variables=variables, past_days=past_days, forecast_days=forecast_days,
+        start_date=start_date, end_date=end_date,
     )
     logger.info("%s weather: %d rows (%s -> %s)", city.name, len(df), df["datetime"].min(), df["datetime"].max())
     return df
 
 
-def fetch_raw(city: Location = LOCATION, *, past_days: int = 7, forecast_days: int = 0) -> pd.DataFrame:
+def fetch_raw(
+    city: Location = LOCATION,
+    *,
+    past_days: int = 7,
+    forecast_days: int = 0,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> pd.DataFrame:
     """Fetch BOTH air quality and weather for ONE city and merge on ``datetime``.
 
     Returns one tidy hourly row per timestamp with every raw pollutant + weather
     variable, tagged with the city name and its coordinates (the coordinates
     become useful location features for the single global model).
     """
-    aq = fetch_air_quality(city, past_days=past_days, forecast_days=forecast_days)
-    wx = fetch_weather(city, past_days=past_days, forecast_days=forecast_days)
+    aq = fetch_air_quality(city, past_days=past_days, forecast_days=forecast_days,
+                           start_date=start_date, end_date=end_date)
+    wx = fetch_weather(city, past_days=past_days, forecast_days=forecast_days,
+                       start_date=start_date, end_date=end_date)
     merged = pd.merge(aq, wx, on="datetime", how="inner")
     merged.insert(1, "city", city.name)
     merged["latitude"] = city.latitude
     merged["longitude"] = city.longitude
     merged = merged.sort_values("datetime").reset_index(drop=True)
-    logger.info("%s merged raw dataset: %d rows x %d cols", city.name, merged.shape[0], merged.shape[1])
+    logger.info("%s merged raw: %d rows x %d cols", city.name, merged.shape[0], merged.shape[1])
     return merged
 
 
