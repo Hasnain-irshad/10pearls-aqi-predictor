@@ -140,6 +140,23 @@ def build_features(raw: pd.DataFrame, *, dropna_target: bool = True) -> pd.DataF
     return df
 
 
+def build_features_all_cities(raw_all: pd.DataFrame, *, dropna_target: bool = True) -> pd.DataFrame:
+    """Build features for a MULTI-city raw frame.
+
+    Critical: lag/rolling features must be computed **per city** — a lag must
+    never reach across a city boundary (Lahore's 24h-ago value is meaningless for
+    Karachi). We group by city, engineer each group independently, then stack.
+    """
+    parts = [
+        build_features(group, dropna_target=dropna_target)
+        for _, group in raw_all.groupby("city", sort=False)
+    ]
+    combined = pd.concat(parts, ignore_index=True)
+    logger.info("Built multi-city features: %d rows across %d cities",
+                len(combined), raw_all["city"].nunique())
+    return combined
+
+
 if __name__ == "__main__":
     from aqi.data.openmeteo import fetch_raw
 

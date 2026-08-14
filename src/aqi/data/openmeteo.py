@@ -16,7 +16,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from aqi.config import LOCATION
+from aqi.config import CITIES, LOCATION, Location
 from aqi.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -112,63 +112,73 @@ def _fetch_hourly(
 
 
 def fetch_air_quality(
+    city: Location = LOCATION,
     *,
-    latitude: float = LOCATION.latitude,
-    longitude: float = LOCATION.longitude,
-    timezone: str = LOCATION.timezone,
     variables: Sequence[str] = AIR_QUALITY_VARS,
     past_days: int = 7,
     forecast_days: int = 0,
 ) -> pd.DataFrame:
-    """Fetch hourly air-quality data (pollutants + Open-Meteo's us_aqi)."""
-    logger.info("Fetching air quality for (%.4f, %.4f), past_days=%d", latitude, longitude, past_days)
+    """Fetch hourly air-quality data (pollutants + Open-Meteo's us_aqi) for a city."""
+    logger.info("Fetching air quality for %s, past_days=%d", city.name, past_days)
     df = _fetch_hourly(
         AIR_QUALITY_URL,
-        latitude=latitude, longitude=longitude, timezone=timezone,
+        latitude=city.latitude, longitude=city.longitude, timezone=city.timezone,
         variables=variables, past_days=past_days, forecast_days=forecast_days,
     )
-    logger.info("Air-quality: %d rows (%s -> %s)", len(df), df["datetime"].min(), df["datetime"].max())
+    logger.info("%s air-quality: %d rows (%s -> %s)", city.name, len(df), df["datetime"].min(), df["datetime"].max())
     return df
 
 
 def fetch_weather(
+    city: Location = LOCATION,
     *,
-    latitude: float = LOCATION.latitude,
-    longitude: float = LOCATION.longitude,
-    timezone: str = LOCATION.timezone,
     variables: Sequence[str] = WEATHER_VARS,
     past_days: int = 7,
     forecast_days: int = 0,
 ) -> pd.DataFrame:
-    """Fetch hourly weather data (temperature, wind, humidity, pressure, ...)."""
-    logger.info("Fetching weather for (%.4f, %.4f), past_days=%d", latitude, longitude, past_days)
+    """Fetch hourly weather data (temperature, wind, humidity, pressure, ...) for a city."""
+    logger.info("Fetching weather for %s, past_days=%d", city.name, past_days)
     df = _fetch_hourly(
         WEATHER_URL,
-        latitude=latitude, longitude=longitude, timezone=timezone,
+        latitude=city.latitude, longitude=city.longitude, timezone=city.timezone,
         variables=variables, past_days=past_days, forecast_days=forecast_days,
     )
-    logger.info("Weather: %d rows (%s -> %s)", len(df), df["datetime"].min(), df["datetime"].max())
+    logger.info("%s weather: %d rows (%s -> %s)", city.name, len(df), df["datetime"].min(), df["datetime"].max())
     return df
 
 
-def fetch_raw(*, past_days: int = 7, forecast_days: int = 0) -> pd.DataFrame:
-    """Fetch BOTH air quality and weather and merge them on ``datetime``.
+def fetch_raw(city: Location = LOCATION, *, past_days: int = 7, forecast_days: int = 0) -> pd.DataFrame:
+    """Fetch BOTH air quality and weather for ONE city and merge on ``datetime``.
 
-    This is the single entry point the feature pipeline uses: one tidy hourly
-    row per timestamp with every raw pollutant and weather variable.
+    Returns one tidy hourly row per timestamp with every raw pollutant + weather
+    variable, tagged with the city name and its coordinates (the coordinates
+    become useful location features for the single global model).
     """
-    aq = fetch_air_quality(past_days=past_days, forecast_days=forecast_days)
-    wx = fetch_weather(past_days=past_days, forecast_days=forecast_days)
+    aq = fetch_air_quality(city, past_days=past_days, forecast_days=forecast_days)
+    wx = fetch_weather(city, past_days=past_days, forecast_days=forecast_days)
     merged = pd.merge(aq, wx, on="datetime", how="inner")
-    merged.insert(1, "city", LOCATION.name)
+    merged.insert(1, "city", city.name)
+    merged["latitude"] = city.latitude
+    merged["longitude"] = city.longitude
     merged = merged.sort_values("datetime").reset_index(drop=True)
-    logger.info("Merged raw dataset: %d rows x %d cols", merged.shape[0], merged.shape[1])
+    logger.info("%s merged raw dataset: %d rows x %d cols", city.name, merged.shape[0], merged.shape[1])
     return merged
 
 
+def fetch_raw_all_cities(cities: Sequence[Location] = CITIES, *, past_days: int = 7, forecast_days: int = 0) -> pd.DataFrame:
+    """Fetch merged raw data for EVERY supported city and stack into one frame."""
+    frames = [fetch_raw(city, past_days=past_days, forecast_days=forecast_days) for city in cities]
+    combined = pd.concat(frames, ignore_index=True)
+    logger.info("All cities combined: %d rows across %d cities", len(combined), len(cities))
+    return combined
+
+
 if __name__ == "__main__":
-    # Quick manual smoke test: run `python -m aqi.data.openmeteo` and eyeball it.
-    frame = fetch_raw(past_days=3)
-    print("\nShape:", frame.shape)
-    print("\nColumns:", list(frame.columns))
-    print("\nHead:\n", frame.head())
+    # Smoke test across two cities to prove the multi-city path works.
+    from aqi.config import get_city
+
+    for city in (get_city("Lahore"), get_city("Karachi")):
+        frame = fetch_raw(city, past_days=2)
+        latest = frame.iloc[-1]
+        print(f"{city.name:12s} | {frame.shape[0]} rows x {frame.shape[1]} cols "
+              f"| latest us_aqi={latest['us_aqi']} pm2_5={latest['pm2_5']}")
