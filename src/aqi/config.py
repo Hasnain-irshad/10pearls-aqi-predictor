@@ -35,6 +35,7 @@ class Location:
     name: str
     latitude: float
     longitude: float
+    province: str = "Punjab"
     timezone: str = "Asia/Karachi"
 
     @property
@@ -44,21 +45,40 @@ class Location:
 
 
 # ---- The supported cities (single source of truth for the whole project) ----
-# All major Pakistani cities share the Asia/Karachi timezone. Add/remove here and
-# every pipeline, the model, and the dashboard dropdown pick it up automatically.
+# A geographically diverse training set covering ALL provinces + ICT + GB + AJK.
+# All of Pakistan shares the Asia/Karachi timezone. The global model can still
+# predict for ANY city on demand (it uses location + weather features), so this
+# is the *training/history* set, not a hard limit on what users can query.
 CITIES: list[Location] = [
-    Location("Lahore", 31.5204, 74.3587),
-    Location("Karachi", 24.8607, 67.0011),
-    Location("Islamabad", 33.6844, 73.0479),
-    Location("Rawalpindi", 33.5651, 73.0169),
-    Location("Faisalabad", 31.4504, 73.1350),
-    Location("Multan", 30.1575, 71.5249),
-    Location("Peshawar", 34.0151, 71.5249),
-    Location("Quetta", 30.1798, 66.9750),
-    Location("Gujranwala", 32.1877, 74.1945),
-    Location("Sialkot", 32.4945, 74.5229),
-    Location("Hyderabad", 25.3960, 68.3578),
-    Location("Bahawalpur", 29.3956, 71.6836),
+    # --- Punjab ---
+    Location("Lahore", 31.5204, 74.3587, "Punjab"),
+    Location("Faisalabad", 31.4504, 73.1350, "Punjab"),
+    Location("Rawalpindi", 33.5651, 73.0169, "Punjab"),
+    Location("Multan", 30.1575, 71.5249, "Punjab"),
+    Location("Gujranwala", 32.1877, 74.1945, "Punjab"),
+    Location("Sialkot", 32.4945, 74.5229, "Punjab"),
+    Location("Bahawalpur", 29.3956, 71.6836, "Punjab"),
+    Location("Sargodha", 32.0836, 72.6711, "Punjab"),
+    # --- Sindh ---
+    Location("Karachi", 24.8607, 67.0011, "Sindh"),
+    Location("Hyderabad", 25.3960, 68.3578, "Sindh"),
+    Location("Sukkur", 27.7052, 68.8574, "Sindh"),
+    Location("Larkana", 27.5600, 68.2264, "Sindh"),
+    # --- Khyber Pakhtunkhwa ---
+    Location("Peshawar", 34.0151, 71.5249, "Khyber Pakhtunkhwa"),
+    Location("Mardan", 34.1986, 72.0404, "Khyber Pakhtunkhwa"),
+    Location("Abbottabad", 34.1688, 73.2215, "Khyber Pakhtunkhwa"),
+    Location("Mingora", 34.7795, 72.3617, "Khyber Pakhtunkhwa"),
+    # --- Balochistan ---
+    Location("Quetta", 30.1798, 66.9750, "Balochistan"),
+    Location("Gwadar", 25.1264, 62.3225, "Balochistan"),
+    Location("Turbat", 26.0031, 63.0544, "Balochistan"),
+    # --- Islamabad Capital Territory ---
+    Location("Islamabad", 33.6844, 73.0479, "Islamabad Capital Territory"),
+    # --- Gilgit-Baltistan ---
+    Location("Gilgit", 35.9208, 74.3144, "Gilgit-Baltistan"),
+    # --- Azad Jammu & Kashmir ---
+    Location("Muzaffarabad", 34.3700, 73.4711, "Azad Jammu & Kashmir"),
 ]
 
 CITIES_BY_NAME: dict[str, Location] = {c.name: c for c in CITIES}
