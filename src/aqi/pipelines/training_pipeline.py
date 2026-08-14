@@ -50,7 +50,8 @@ def _candidate_models() -> dict:
     return {
         "Ridge": make_pipeline(StandardScaler(), Ridge(alpha=1.0)),
         "RandomForest": RandomForestRegressor(
-            n_estimators=150, max_depth=22, min_samples_leaf=3, n_jobs=-1, random_state=42
+            n_estimators=120, max_depth=16, min_samples_leaf=10,
+            max_features="sqrt", n_jobs=-1, random_state=42
         ),
         "XGBoost": XGBRegressor(
             n_estimators=600, learning_rate=0.05, max_depth=8,
@@ -67,7 +68,7 @@ def _format_table(results: dict[str, dict]) -> str:
     return "\n".join(lines)
 
 
-def run(*, max_rows: int = 300_000, horizons=DEFAULT_HORIZONS, save: bool = True):
+def run(*, max_rows: int = 200_000, horizons=DEFAULT_HORIZONS, save: bool = True):
     logger.info("=== Training pipeline start ===")
     features = read_features()
     logger.info("Loaded %d feature rows across %d cities", len(features), features["city"].nunique())
@@ -143,7 +144,7 @@ def _write_metrics_report(results, best_name, n_train, n_valid) -> None:
 
 def main() -> None:
     p = argparse.ArgumentParser(description="AQI training pipeline (global model)")
-    p.add_argument("--max-rows", type=int, default=300_000)
+    p.add_argument("--max-rows", type=int, default=200_000)
     p.add_argument("--no-save", action="store_true")
     args = p.parse_args()
     run(max_rows=args.max_rows, save=not args.no_save)
