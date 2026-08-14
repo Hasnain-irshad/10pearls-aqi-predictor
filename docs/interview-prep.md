@@ -285,45 +285,186 @@ in production. **This is the single most important detail in the whole pipeline.
 ---
 
 ## 8. Module 2 — Historical Backfill
-*(pending — populated when the module is done)*
-> Will cover: why we backfill (need history to train), chunked fetching of the
-> archive endpoints, building features on a contiguous series so lags are correct,
-> and one-shot bulk insert.
+
+**What it does:** replays the feature logic over ~3.6 years (2023-01 → 2026-08)
+for all 22 cities, producing **696,960 hourly feature rows** — the training set.
+
+**Key design points:**
+- **Chunked fetching:** history is pulled in ~3-month chunks (`_month_chunks`) to
+  keep each API request small and reliable; chunks are concatenated *per city*.
+- **Two weather endpoints:** recent data uses Open-Meteo's forecast endpoint;
+  historical ranges use the **ERA5 archive endpoint** (`archive-api`). The air-
+  quality endpoint serves both via `start_date`/`end_date`.
+- **Features built on a contiguous per-city series** so lags/rolling windows are
+  correct and never cross a city boundary.
+- **Fault-tolerant:** if one city's fetch fails, the loop logs it and continues.
+
+**The storage abstraction (important architecture point):** all pipelines call
+`aqi.data.store.save_features()`, which writes to **local Parquet** by default and
+to **Hopsworks automatically when `HOPSWORKS_API_KEY` is set**. This let the whole
+system be built and validated locally, with zero code change needed to switch to
+the Feature Store.
+
+**Multi-city / global-model design:**
+- A single `CITIES` registry (config) with province tags is the one source of truth.
+- One **global model** trained on all cities uses `latitude`, `longitude`, and
+  weather as features, so it generalises — and can predict for **any** location on
+  demand, not just the 22 it trained on.
+
+**Interview Q&A:**
+- *Why backfill at all?* → A model needs history; the hourly pipeline only adds
+  new rows going forward.
+- *Why local Parquet AND Hopsworks?* → Decoupling via a storage interface means
+  development isn't blocked on cloud credentials, and there's no train/serve skew.
+- *One global model or one per city?* → Global: generalises, scales to new cities,
+  fewer artifacts; city identity is captured by location + weather features.
 
 ## 9. Module 3 — EDA
-*(pending)*
-> Will cover: seasonality (winter smog), pollutant correlations, AQI distribution,
-> missing-data handling, and the key visual insights that motivate feature choices.
+
+**What it does:** generates 5 figures + a findings file (`docs/eda_findings.md`)
+from the 697k-row dataset.
+
+**Key findings (real data, 2023–2026):**
+- **Most polluted city: Faisalabad** (mean AQI ≈ 157) — an industrial hub, it
+  edges out Lahore on the long-run average.
+- **Cleanest: Gilgit** (mean AQI ≈ 76) — mountain air.
+- **Seasonality: January is the worst month** — the winter-smog spike is stark
+  (temperature inversions trap pollutants). This justifies the `month` cyclical feature.
+- **Diurnal pattern:** AQI varies by hour of day → justifies the `hour` cyclical feature.
+- **Strongest weather correlate:** surface pressure (r ≈ 0.32); wind and
+  temperature also matter → justifies the weather features.
+
+**Figures:** `eda_aqi_distribution`, `eda_city_ranking`, `eda_seasonality`,
+`eda_diurnal`, `eda_weather_correlation` (in `docs/images/`).
+
+**Interview Q&A:**
+- *What did EDA tell you that shaped the model?* → Strong monthly + hourly
+  seasonality and weather dependence → cyclical time features + weather features.
+- *Why is January worst?* → Winter temperature inversions + low wind trap
+  pollutants near the surface.
 
 ## 10. Module 4 — Training Pipeline
-*(pending)*
-> Will cover: walk-forward validation, baseline vs Ridge vs RandomForest vs
-> XGBoost, RMSE/MAE/R² (and what each means), hyperparameter tuning, and model
-> registration.
 
-## 11. Module 5 — Deep Learning
-*(pending)*
-> Will cover: why/when LSTM helps on sequences, windowing, scaling, and a fair
-> comparison against the tree models.
+**The forecasting design (know this cold — it's the cleverest part):**
+We predict AQI at a future hour `τ = t + h` (h = 1…72). At time `t` we know:
+- **Target-time features** — the *forecasted* weather at `τ`, the calendar at `τ`
+  (deterministic), and the location. (Open-Meteo gives us the weather forecast.)
+- **Anchor-state features** — the latest observed pollution at `t` (current AQI,
+  recent rolling means, current PM), obtained by shifting each series by `h`.
+- **`horizon` (h) itself is a feature** → **one** global model serves every city
+  and every lead time from +1h to +72h.
+
+**Why not just autoregress?** Recursively feeding predictions back in compounds
+errors. Our direct, weather-driven approach avoids that and exploits the fact
+that weather (which drives dispersion) is itself forecastable.
+
+**Honest evaluation:**
+- **Chronological split** (`time_split`) — train on the past, validate on the most
+  recent 20%. A random split would leak the future and inflate scores.
+- **Persistence baseline** — "AQI in h hours = AQI now." Real models must beat it,
+  which justifies their complexity.
+- **Models compared:** Ridge (linear), RandomForest, XGBoost (gradient boosting).
+- **Metrics:** RMSE (penalises big misses), MAE (average error, same units as AQI),
+  R² (variance explained). See `docs/model_metrics.md` for the results table.
+
+**Prediction intervals:** we take the validation residuals *per horizon* and use
+their 10th/90th percentiles as an 80% interval (a split-conformal-style method).
+So the dashboard shows a *band*, not a false-precision single line — and the band
+correctly widens at longer horizons.
+
+**Documented assumption:** training uses the *actual* weather at `τ`; inference
+uses the *forecast*. We assume the weather forecast is good (Open-Meteo's is) —
+standard practice, and stated as a limitation.
+
+**Interview Q&A:**
+- *Why is `horizon` a feature?* → It lets one model cover all lead times and learn
+  how uncertainty/behaviour changes with distance into the future.
+- *Why a persistence baseline?* → To prove the ML actually adds value over the
+  trivial "nothing changes" forecast.
+- *How do you get uncertainty from a point model?* → Empirical residual quantiles
+  per horizon (conformal-style intervals).
+- *Why RMSE and MAE?* → RMSE punishes large errors (dangerous AQI spikes matter
+  more); MAE is the interpretable average error.
+
+## 11. Module 5 — Deep Learning *(planned next)*
+
+**Status:** the model layer currently ships statistical (Ridge) + tree ensembles
+(RandomForest, XGBoost) + a persistence baseline. An **LSTM (TensorFlow)** is the
+next addition to satisfy the "statistical → deep learning" requirement.
+> Plan: window the per-city hourly series, scale inputs, train an LSTM to predict
+> the AQI sequence, and compare it *fairly* (same chronological split, same
+> metrics) against XGBoost. Tree models often win on this kind of tabular,
+> weather-driven data, which is itself a legitimate, defensible finding.
 
 ## 12. Module 6 — SHAP
-*(pending)*
-> Will cover: Shapley values intuition, global vs local explanations, and which
-> features drive Lahore's AQI.
 
-## 13. Module 7 — Dashboard
-*(pending)*
-> Will cover: loading model + features, computing live predictions, UX, and
-> deployment to Streamlit Cloud.
+**What it does:** explains the model with Shapley values (each feature's fair
+contribution to each prediction). `TreeExplainer` gives exact, fast values for the
+XGBoost model; results saved to `docs/images/shap_importance.png`.
+
+**What drives the forecast (real results, ranked):**
+1. `aqi_anchor` — the current AQI (by far the strongest; air quality is autocorrelated).
+2. `pm2_5_anchor` — current PM2.5 (the dominant pollutant).
+3. `aqi_roll_mean_24h` — recent 24-hour trend.
+4. `hour_sin`, `month_cos` — time of day and season.
+5. `horizon` — how far ahead we're predicting.
+6. `latitude`/`longitude` — **the global model genuinely uses geography** to
+   differentiate cities.
+7. `surface_pressure` — the top weather driver.
+
+**Interview Q&A:**
+- *What are SHAP values?* → A game-theoretic attribution: each feature's average
+  marginal contribution to a prediction across all feature orderings.
+- *What did SHAP confirm?* → The model behaves sensibly — it leans on current
+  pollution + recent trend + time/season + location + weather, not spurious signals.
+
+## 13. Module 7 — Dashboard (React + FastAPI)
+
+**Architecture:** a **FastAPI** backend serves pre-computed forecasts (and can run
+on-demand predictions for any location); a **React** (Vite) frontend renders them.
+Keeping inference a scheduled *batch* job (writing `predictions.json`) means the
+core dashboard needs no always-on server — it stays serverless.
+
+**Frontend features:** city dropdown grouped by province, hourly/daily toggle, a
+forecast chart with the **prediction-interval band**, an interactive **Leaflet map**
+of Pakistan (circles coloured by live AQI), a hazardous-air **alert banner**, and
+the EPA colour legend.
+
+**API endpoints:** `/api/health`, `/api/cities`, `/api/categories`,
+`/api/predictions`, `/api/predictions/{city}`, `/api/predict` (on-demand, any lat/lon).
+
+**Interview Q&A:**
+- *Why React + FastAPI instead of Streamlit?* → A far more polished, interactive UI;
+  FastAPI satisfies the brief's "Flask/FastAPI" option; and pre-computed
+  predictions keep it serverless.
+- *How does "any city" work with a fixed training set?* → The global model uses
+  location + weather features, so `/api/predict?lat=&lon=` forecasts anywhere.
 
 ## 14. Module 8 — Alerts
-*(pending)*
-> Will cover: hazardous-threshold logic and notification delivery.
+
+**What it does:** `check_forecast()` scans a city's 72-hour forecast, finds the
+peak AQI and when it first crosses "Unhealthy" (150) or "Very Unhealthy" (200),
+and returns a severity + health advice. Surfaced as a banner in the dashboard;
+the same structured output can drive email/webhook notifications.
 
 ## 15. CI/CD Automation
-*(pending)*
-> Will cover: hourly feature + daily training GitHub Actions, secrets, schedules
-> (cron), concurrency, and how the green badges *prove* the system is live.
+
+**Two GitHub Actions workflows (serverless, free):**
+- **`feature-pipeline.yml`** — hourly (`cron: 5 * * * *`): fetch → engineer →
+  store features for all cities.
+- **`training-pipeline.yml`** — daily (`cron: 30 2 * * *`): retrain → batch
+  inference → commit the refreshed `predictions.json` so the live dashboard updates.
+
+**Details that matter:** secrets via GitHub Secrets (`HOPSWORKS_API_KEY`),
+`concurrency` groups to prevent overlapping runs, `workflow_dispatch` for manual
+triggers, and pip caching for speed. The green run history is the *proof* the
+system is genuinely live and automated.
+
+**Interview Q&A:**
+- *Why is this "serverless"?* → No server to manage; GitHub runs the schedules,
+  Hopsworks stores state, the frontend is static + a batch-written JSON.
+- *What proves it actually runs?* → The Actions run history and the hourly/daily
+  commits to the feature store and predictions file.
 
 ---
 

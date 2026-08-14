@@ -220,11 +220,32 @@ WEEK 7  (Aug 20 - Aug 26)  ..... REPORT + POLISH + SUBMISSION
            Task 1.1 - Fetch weather + pollutants from Open-Meteo (verified live).
            Task 1.2 - AQI computation (verified; caught a CO unit-mismatch bug).
            Task 1.3 - Feature engineering: 19 raw cols -> 72 features (verified).
-  [DONE] Multi-city refactor: city registry (12 Pakistani cities), per-city fetch
-         + per-city feature building (no cross-city leakage). Verified live on
-         Lahore/Karachi/Islamabad -> 74 features per row.
-  [NEXT] Task 1.4 - Store features in Hopsworks (needs API key + Windows fix).
-  [TODO] Module 2 backfill, hourly automation, then Weeks 4-7 as above.
+  [DONE] Multi-city: 22 cities across all provinces + ICT/GB/AJK; single global
+         model design; per-city feature building (no cross-city leakage).
+  [DONE] Storage abstraction (local Parquet now, Hopsworks when keyed).
+  [DONE] Module 2 backfill: 696,960 hourly rows, 22 cities, 2023-01 -> 2026-08.
+  [DONE] Module 3 EDA: 5 figures + findings (worst city Faisalabad ~157;
+         cleanest Gilgit ~76; worst month January; top weather driver pressure).
+  [DONE] Module 4 training: global XGBoost best (RMSE 20.6 / MAE 11.8 / R2 0.82),
+         beats persistence baseline by 26%; walk-forward split; prediction
+         intervals (per-horizon residual quantiles). Ridge + RandomForest compared.
+  [DONE] Module 6 SHAP: top drivers = current AQI, PM2.5, 24h trend, hour, season,
+         horizon, location, surface pressure.
+  [DONE] Batch inference: 72h hourly + 3-day forecasts (with intervals) for all
+         cities -> predictions.json.
+  [DONE] Module 8 alerts: hazardous-AQI detection.
+  [DONE] FastAPI backend + React dashboard (city dropdown, hourly/daily toggle,
+         forecast chart with interval band, Leaflet AQI map, alert banner). Builds
+         and serves end-to-end locally.
+  [DONE] CI/CD workflows authored (hourly feature + daily training/inference).
+  [DONE] 12 unit tests passing.
+
+  [NEXT / NEEDS USER INPUT]
+    - Module 5: LSTM/TensorFlow deep-learning model (to add).
+    - Switch storage to Hopsworks (needs API key + Windows twofish fix).
+    - Deploy backend (e.g. Render/Railway) + frontend (e.g. Vercel).
+    - Push repo to GitHub + set secrets so the Actions run live.
+    - LaTeX report (awaiting the user's sample template).
 
   KNOWN ISSUE / RISK:
     * Hopsworks does not pip-install on Windows out of the box (the 'twofish'

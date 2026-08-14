@@ -88,19 +88,32 @@ cp .env.example .env      # then fill in HOPSWORKS_API_KEY
 python -m aqi.pipelines.feature_pipeline
 ```
 
+## Results (so far)
+
+- **Dataset:** 696,960 hourly rows · 22 cities · Jan 2023 → Aug 2026.
+- **Best model:** global **XGBoost** — RMSE **20.6**, MAE **11.8**, **R² 0.82**,
+  beating a persistence baseline by **26%** (walk-forward validation).
+- **Coverage:** 3-day (72-hour) forecasts with 80% prediction intervals for every
+  city; predicts for *any* location on demand.
+
+See [docs/RUNNING.md](docs/RUNNING.md) to run it end-to-end, and
+[docs/interview-prep.md](docs/interview-prep.md) for the full write-up.
+
 ## Roadmap / progress
 
-- [ ] **Module 1** — Feature pipeline (fetch + engineer features)
-- [ ] **Module 2** — Historical backfill into the Feature Store
-- [ ] **CI/CD** — Hourly feature pipeline (GitHub Actions)
-- [ ] **Module 3** — Exploratory Data Analysis
-- [ ] **Module 4** — Training pipeline (Ridge / RandomForest / XGBoost)
-- [ ] **Module 5** — Deep learning model (LSTM / TensorFlow)
-- [ ] **Module 6** — SHAP explainability
-- [ ] **CI/CD** — Daily training pipeline
-- [ ] **Module 7** — Streamlit dashboard (deployed)
-- [ ] **Module 8** — Hazardous-AQI alerts
-- [ ] **Final** — Report & documentation
+- [x] **Module 1** — Feature pipeline (fetch + engineer 72 features)
+- [x] **Multi-city** — 22 cities across all provinces; single global model
+- [x] **Module 2** — Historical backfill (697k rows)
+- [x] **Module 3** — Exploratory Data Analysis (figures + findings)
+- [x] **Module 4** — Training pipeline (baseline / Ridge / RF / XGBoost + intervals)
+- [ ] **Module 5** — Deep learning model (LSTM / TensorFlow) *(next)*
+- [x] **Module 6** — SHAP explainability
+- [x] **Module 7** — React + FastAPI dashboard (map, toggle, intervals) *(local; deploy pending)*
+- [x] **Module 8** — Hazardous-AQI alerts
+- [x] **CI/CD** — Hourly feature + daily training workflows *(ready; needs repo + secrets)*
+- [ ] **Storage** — Switch local Parquet → Hopsworks *(needs API key)*
+- [ ] **Deploy** — Frontend + backend to the cloud
+- [ ] **Final** — LaTeX report & documentation
 
 ---
 
