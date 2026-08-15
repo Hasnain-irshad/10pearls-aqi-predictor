@@ -95,5 +95,23 @@ code { background: #000; padding: 1px 6px; border-radius: 4px; font-size: 0.85em
 .legend-range { width: 62px; color: var(--muted); }
 .legend-name { color: var(--text); }
 
+/* Chat advisor */
+.chat-card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; }
+.chat-card h3 { font-size: 16px; }
+.chat-hint { font-size: 12px; color: var(--muted); margin: 4px 0 10px; }
+.chat-log { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; padding-right: 4px; }
+.chat-suggest { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+.chat-suggest button { text-align: left; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; cursor: pointer; }
+.chat-suggest button:hover { border-color: var(--accent); }
+.chat-msg { padding: 9px 12px; border-radius: 10px; font-size: 13.5px; line-height: 1.45; white-space: pre-wrap; max-width: 92%; }
+.chat-msg.user { background: var(--accent); color: #04222e; align-self: flex-end; }
+.chat-msg.assistant { background: var(--panel-2); color: var(--text); align-self: flex-start; border: 1px solid var(--border); }
+.chat-msg.thinking { color: var(--muted); font-style: italic; }
+.chat-error { color: #ffb3c0; font-size: 12.5px; padding: 6px 2px; }
+.chat-input { display: flex; gap: 8px; margin-top: 10px; }
+.chat-input input { flex: 1; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; font-size: 13.5px; }
+.chat-input button { background: var(--accent); color: #04222e; border: 0; border-radius: 8px; padding: 9px 16px; font-weight: 600; cursor: pointer; }
+.chat-input button:disabled { opacity: 0.5; cursor: default; }
+
 /* Footer */
 .footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; text-align: center; }
