@@ -386,15 +386,31 @@ standard practice, and stated as a limitation.
 - *Why RMSE and MAE?* → RMSE punishes large errors (dangerous AQI spikes matter
   more); MAE is the interpretable average error.
 
-## 11. Module 5 — Deep Learning *(planned next)*
+## 11. Module 5 — Deep Learning (LSTM)
 
-**Status:** the model layer currently ships statistical (Ridge) + tree ensembles
-(RandomForest, XGBoost) + a persistence baseline. An **LSTM (TensorFlow)** is the
-next addition to satisfy the "statistical → deep learning" requirement.
-> Plan: window the per-city hourly series, scale inputs, train an LSTM to predict
-> the AQI sequence, and compare it *fairly* (same chronological split, same
-> metrics) against XGBoost. Tree models often win on this kind of tabular,
-> weather-driven data, which is itself a legitimate, defensible finding.
+**What it does:** a TensorFlow **LSTM** consumes the past 48 hours of pollution +
+weather (a real *sequence*, per city) and predicts AQI 24h ahead — the
+deep-learning member of the model family the brief asks for. Global model,
+chronological split, compared fairly against XGBoost on the *same* +24h task.
+
+**Real results (+24h):**
+| Model | RMSE | MAE | R² |
+|-------|-----:|----:|---:|
+| LSTM | **22.12** | 14.32 | 0.799 |
+| XGBoost (same task) | 22.63 | 14.48 | 0.789 |
+| Persistence baseline | 28.79 | 17.21 | 0.660 |
+
+**The nuanced finding (great interview material):** the LSTM *slightly edges out*
+XGBoost at the 24-hour horizon, but **XGBoost remains the production model** — it
+covers all horizons 1–72h in one model (overall RMSE 20.6), trains in ~1 min vs
+~25 min, and is SHAP-explainable. *We chose by measuring, not by hype.*
+
+**Interview Q&A:**
+- *Why did you build an LSTM if XGBoost ships?* → The brief asks for statistical →
+  deep-learning variety; and the comparison is itself a finding — a sequence model
+  is competitive but not worth its cost here.
+- *Why does XGBoost win overall despite the LSTM edging it at +24h?* → One
+  gradient-boosted model handles every lead time and is far cheaper to train/serve.
 
 ## 12. Module 6 — SHAP
 
