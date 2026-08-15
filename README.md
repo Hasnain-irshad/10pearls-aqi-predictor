@@ -106,7 +106,7 @@ See [docs/RUNNING.md](docs/RUNNING.md) to run it end-to-end, and
 - [x] **Module 2** — Historical backfill (697k rows)
 - [x] **Module 3** — Exploratory Data Analysis (figures + findings)
 - [x] **Module 4** — Training pipeline (baseline / Ridge / RF / XGBoost + intervals)
-- [ ] **Module 5** — Deep learning model (LSTM / TensorFlow) *(next)*
+- [x] **Module 5** — Deep learning model (LSTM / TensorFlow) — competitive (+24h RMSE 22.1)
 - [x] **Module 6** — SHAP explainability
 - [x] **Module 7** — React + FastAPI dashboard (map, toggle, intervals) *(local; deploy pending)*
 - [x] **Module 8** — Hazardous-AQI alerts
