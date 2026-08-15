@@ -59,18 +59,20 @@ def run(*, start: str = "2023-08-01", end: str | None = None, store: bool = True
     for i, city in enumerate(CITIES, 1):
         logger.info("[%d/%d] Backfilling %s ...", i, len(CITIES), city.name)
         try:
-            all_feats.append(_backfill_city(city, start, end))
+            feats = _backfill_city(city, start, end)
+            # Store incrementally, per city: resilient (a slow/failed insert on one
+            # city doesn't lose the rest) and shows progress in the logs.
+            if store:
+                save_features(feats)
+                logger.info("  [%d/%d] stored %s (%d rows)", i, len(CITIES), city.name, len(feats))
+            all_feats.append(feats)
         except Exception as exc:  # keep going if one city fails
             logger.error("  %s failed: %s", city.name, exc)
 
-    combined = pd.concat(all_feats, ignore_index=True)
+    combined = pd.concat(all_feats, ignore_index=True) if all_feats else pd.DataFrame()
     logger.info("Backfill total: %d rows across %d cities", len(combined), len(all_feats))
-
-    if store:
-        save_features(combined)
-    else:
+    if not store:
         logger.info("--no-store: not writing to the store.")
-
     logger.info("=== Backfill done ===")
     return combined
 
