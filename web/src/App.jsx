@@ -7,6 +7,7 @@ import AlertBanner from "./components/AlertBanner.jsx";
 import ForecastChart from "./components/ForecastChart.jsx";
 import PakistanMap from "./components/PakistanMap.jsx";
 import Legend from "./components/Legend.jsx";
+import ChatPanel from "./components/ChatPanel.jsx";
 
 export default function App() {
   const [data, setData] = useState(null); // full predictions payload
@@ -81,6 +82,7 @@ export default function App() {
                   onSelect={setSelected}
                 />
                 <Legend />
+                <ChatPanel city={selected} />
               </aside>
             </div>
           )}

@@ -12,6 +12,7 @@ import json
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from aqi.config import CITIES, Location
 from aqi.data.aqi import AQI_CATEGORIES
@@ -91,3 +92,26 @@ def predict_on_demand(name: str, lat: float, lon: float, province: str = "Custom
     except FileNotFoundError:
         raise HTTPException(status_code=503, detail="Model not trained yet.")
     return {"city": name, **result}
+
+
+class ChatRequest(BaseModel):
+    question: str
+    history: list[dict] = []
+
+
+@app.post("/api/chat")
+def chat(req: ChatRequest):
+    """LLM air-quality advisor grounded in our forecasts (needs ANTHROPIC_API_KEY)."""
+    import os
+
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        raise HTTPException(
+            status_code=503,
+            detail="Advisor unavailable: set ANTHROPIC_API_KEY to enable the AI assistant.",
+        )
+    from aqi.advisor import answer
+
+    try:
+        return answer(req.question, req.history)
+    except Exception as exc:  # surface a clean message to the UI
+        raise HTTPException(status_code=502, detail=f"Advisor error: {exc}")
