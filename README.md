@@ -110,8 +110,9 @@ See [docs/RUNNING.md](docs/RUNNING.md) to run it end-to-end, and
 - [x] **Module 6** — SHAP explainability
 - [x] **Module 7** — React + FastAPI dashboard (map, toggle, intervals) *(local; deploy pending)*
 - [x] **Module 8** — Hazardous-AQI alerts
-- [x] **CI/CD** — Hourly feature + daily training workflows *(ready; needs repo + secrets)*
-- [ ] **Storage** — Switch local Parquet → Hopsworks *(needs API key)*
+- [x] **MCP advisor** — grounded LLM chatbot + MCP server *(needs `ANTHROPIC_API_KEY`)*
+- [x] **CI/CD** — Hourly feature + daily training workflows *(live on GitHub Actions)*
+- [~] **Storage** — Hopsworks Feature Store *(backfill loading via Actions)*
 - [ ] **Deploy** — Frontend + backend to the cloud
 - [ ] **Final** — LaTeX report & documentation
 

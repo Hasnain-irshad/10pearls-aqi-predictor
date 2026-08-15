@@ -484,6 +484,51 @@ system is genuinely live and automated.
 
 ---
 
+## 15b. MCP / LLM Air-Quality Advisor (differentiator)
+
+**What it is:** a conversational AI assistant on the dashboard. A user asks
+*"I have asthma — is it safe to jog in Lahore tomorrow?"* and the model answers
+using our **real forecast**, not invented numbers.
+
+**How it's grounded (the important part):** the LLM (Claude) is given **tools** —
+`get_forecast(city)`, `get_history_summary(city)`, `list_cities()` — that call our
+actual Python functions (`aqi/tools.py`). The model decides which tool to call,
+reads the real AQI, and phrases health advice. This is **tool use / function
+calling**, and it's what makes the answers trustworthy instead of hallucinated.
+
+**Where MCP fits:** the *same* tool functions are also published over the **Model
+Context Protocol** (`aqi/mcp/server.py`), so the system plugs into any MCP client
+(e.g. Claude Desktop) — not just our own chat box. MCP is the standard "USB-C for
+AI tools"; we expose our forecast system as a set of MCP tools.
+
+**Architecture:**
+```
+ React ChatPanel ──▶ /api/chat (FastAPI) ──▶ advisor.py (Claude tool-use loop)
+                                                   │ calls
+                                                   ▼
+                                            aqi/tools.py  ◀── also exposed via ──▶ MCP server
+                                         (get_forecast, get_history, list_cities)
+```
+
+**Design choices to defend:**
+- **Grounded, not generative:** every number comes from a tool call, so the model
+  can't fabricate AQI values — the #1 risk with LLM apps.
+- **Manual tool-use loop** (not a black-box agent framework): full control, no
+  extra dependency; the loop runs tools until the model gives a final answer.
+- **Degrades gracefully:** no `ANTHROPIC_API_KEY` → the endpoint returns a clean
+  "advisor unavailable" message; the rest of the dashboard is unaffected.
+- **One tool definition, two surfaces:** the advisor and the MCP server share the
+  exact same functions (DRY) — the model can't drift from the real data.
+
+**Interview Q&A:**
+- *Isn't an LLM chatbot just a gimmick?* → Not when it's grounded in tools: it
+  turns our model's output into plain-language health guidance, which is the
+  actual user need. It never invents a number.
+- *What is MCP?* → An open standard for connecting LLMs to tools/data uniformly;
+  we expose our forecast system as MCP tools so it works in any MCP client.
+- *How do you stop it from hallucinating AQI?* → It has no numbers of its own —
+  it must call `get_forecast`, which returns our real model output.
+
 ## 16. General / Behavioral Questions
 
 - **"Walk me through your project."** → Use the architecture diagram: four
