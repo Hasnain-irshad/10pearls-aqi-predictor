@@ -1,0 +1,36 @@
+name: Backfill (one-off, manual)
+
+# Run this ONCE after setting up the repo + secrets to load the historical
+# feature dataset into the Hopsworks Feature Store. Trigger it from the
+# Actions tab -> "Backfill (one-off, manual)" -> "Run workflow".
+#
+# This runs on Linux, so `hopsworks` installs cleanly (no Windows twofish issue),
+# and it inserts via the SDK (no browser upload needed).
+
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: "History start date (YYYY-MM-DD)"
+        required: true
+        default: "2023-01-01"
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . -r requirements.txt
+      - name: Run backfill into Hopsworks
+        env:
+          HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
+          HOPSWORKS_PROJECT: ${{ secrets.HOPSWORKS_PROJECT }}
+        run: python -m aqi.pipelines.backfill --start "${{ inputs.start }}"

@@ -46,3 +46,6 @@ Thumbs.db
 # ---- Project docs build ----
 docs/report/*.aux
 docs/report/*.out
+
+# Reference / answer-key code (not part of the submission)
+reference/
