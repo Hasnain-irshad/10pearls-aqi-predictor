@@ -27,10 +27,20 @@ def _default_backend() -> str:
     return "hopsworks" if HOPSWORKS.api_key else "local"
 
 
+def _hopsworks_importable() -> bool:
+    """True only where the hopsworks SDK is installed (Linux/CI, not Windows)."""
+    import importlib.util
+
+    return importlib.util.find_spec("hopsworks") is not None
+
+
 # ----------------------------- FEATURES ------------------------------------- #
 def save_features(df: pd.DataFrame, *, backend: str | None = None) -> None:
     """Upsert a feature DataFrame into the active store (on the primary key)."""
     backend = backend or _default_backend()
+    if backend == "hopsworks" and not _hopsworks_importable():
+        logger.warning("hopsworks not installed here — falling back to local Parquet store.")
+        backend = "local"
     if backend == "hopsworks":
         from aqi.data.hopsworks_store import insert_features, login
 
@@ -42,6 +52,9 @@ def save_features(df: pd.DataFrame, *, backend: str | None = None) -> None:
 def read_features(*, backend: str | None = None) -> pd.DataFrame:
     """Read the full feature table back from the active store."""
     backend = backend or _default_backend()
+    if backend == "hopsworks" and not _hopsworks_importable():
+        logger.warning("hopsworks not installed here — reading from local Parquet store.")
+        backend = "local"
     if backend == "hopsworks":
         from aqi.data.hopsworks_store import login
         from aqi.data.hopsworks_store import read_features as _hread
