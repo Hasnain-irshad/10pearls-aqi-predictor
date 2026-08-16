@@ -11,8 +11,8 @@ pyarrow>=15.0          # Parquet read/write for the local feature store
 requests>=2.31
 python-dotenv>=1.0
 
-# Feature Store + Model Registry
-hopsworks>=4.0,<5.0
+# Feature Store + Model Registry (match the Hopsworks Serverless 5.0 backend)
+hopsworks>=5.0,<5.1
 
 # Classical ML
 scikit-learn>=1.4,<1.6
