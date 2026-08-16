@@ -13,12 +13,13 @@ on:
       start:
         description: "History start date (YYYY-MM-DD)"
         required: true
-        default: "2023-01-01"
+        default: "2024-08-01" # ~1 year: reliable green first run. Use an earlier
+        # date for more history once you've confirmed it works end-to-end.
 
 jobs:
   backfill:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 300 # headroom for Open-Meteo throttling GitHub's shared IPs
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
