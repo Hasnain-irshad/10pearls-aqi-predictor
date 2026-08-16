@@ -17,16 +17,23 @@ PRIMARY_KEY = ["city", "timestamp"]
 EVENT_TIME = "datetime"
 
 
+_PROJECT = None  # cached connection, reused across per-city inserts in the backfill
+
+
 def login():
-    """Authenticate and return the Hopsworks project handle."""
+    """Authenticate and return the Hopsworks project handle (cached)."""
+    global _PROJECT
+    if _PROJECT is not None:
+        return _PROJECT
+
     import hopsworks  # lazy import; only needed on the Hopsworks path
 
     if not HOPSWORKS.api_key:
         raise RuntimeError("HOPSWORKS_API_KEY is not set (add it to .env or CI secrets).")
     logger.info("Logging in to Hopsworks project '%s'...", HOPSWORKS.project)
-    project = hopsworks.login(api_key_value=HOPSWORKS.api_key, project=HOPSWORKS.project)
-    logger.info("Connected to Hopsworks (project id=%s)", project.id)
-    return project
+    _PROJECT = hopsworks.login(api_key_value=HOPSWORKS.api_key, project=HOPSWORKS.project)
+    logger.info("Connected to Hopsworks (project id=%s)", _PROJECT.id)
+    return _PROJECT
 
 
 def _sanitize(df: pd.DataFrame) -> pd.DataFrame:
@@ -48,6 +55,11 @@ def get_feature_group(project):
         event_time=EVENT_TIME,
         description="Hourly AQI features for Pakistani cities.",
         online_enabled=False,
+        # Hopsworks 5.0 defaults new feature groups to DELTA, which needs a client
+        # 'delta' library that the base pip install doesn't ship -> creation fails.
+        # HUDI is materialised server-side (no client lib) and keeps primary-key
+        # upserts (idempotent hourly inserts). This is THE fix for the CI failures.
+        time_travel_format="HUDI",
     )
 
 
