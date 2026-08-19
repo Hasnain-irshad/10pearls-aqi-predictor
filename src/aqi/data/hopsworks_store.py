@@ -68,20 +68,43 @@ def get_feature_group(project):
     )
 
 
-def insert_features(project, df: pd.DataFrame, *, wait: bool = True) -> None:
-    """Upsert features and WAIT for the offline materialization job to finish.
+def insert_features(project, df: pd.DataFrame, *, wait: bool = False) -> None:
+    """Upsert features into the feature group (non-blocking by default).
 
-    We block (wait_for_job=True) so the run only reports success once the rows
-    are actually queryable (Data Preview + statistics populated) — otherwise a
-    pipeline can 'succeed' while the data never materialised. (The earlier
-    non-blocking setting was a workaround for the DELTA feature-group bug, which
-    is now fixed by using HUDI, so blocking is correct again.)"""
+    We DON'T block on the offline materialization job (wait_for_job=False): on
+    the free tier a Spark executor occasionally hangs at INITIALIZING, and a
+    blocking insert then freezes the whole backfill until GitHub kills it at the
+    6-hour cap. Non-blocking uploads the rows and lets Hopsworks materialise them
+    server-side. This is safe because:
+      * inserts are idempotent primary-key upserts (re-running never duplicates), and
+      * the backfill resumes by skipping cities already present (see
+        ``existing_cities``), so any city whose job didn't finish is simply redone.
+    Pass wait=True only when a caller genuinely needs the rows queryable before it
+    continues in the same process."""
     fg = get_feature_group(project)
     clean = _sanitize(df)
     logger.info("Inserting %d rows into feature group '%s' (wait_for_job=%s)...",
                 len(clean), HOPSWORKS.feature_group_name, wait)
     fg.insert(clean, write_options={"wait_for_job": wait})
-    logger.info("Insert complete (materialization confirmed).")
+    logger.info("Insert submitted (materialization runs server-side).")
+
+
+def existing_cities(project) -> set[str]:
+    """Return the set of city names already present in the feature group.
+
+    Lets the backfill resume without redoing finished cities. Reads only the
+    ``city`` column (cheap) and is best-effort: on any error it returns an empty
+    set so the caller falls back to processing every city (idempotent, just
+    slower)."""
+    fg = get_feature_group(project)
+    try:
+        df = fg.select(["city"]).read()
+        cities = set(df["city"].dropna().unique())
+        logger.info("Store already holds %d cities.", len(cities))
+        return cities
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not read existing cities (%s); will not skip any.", exc)
+        return set()
 
 
 def get_feature_view(project):
