@@ -11,8 +11,11 @@ pyarrow>=15.0          # Parquet read/write for the local feature store
 requests>=2.31
 python-dotenv>=1.0
 
-# Feature Store + Model Registry (match the Hopsworks Serverless 5.0 backend)
-hopsworks>=5.0,<5.1
+# Feature Store + Model Registry (match the Hopsworks Serverless 5.0 backend).
+# The [python] extra pulls the full Python-engine deps (confluent-kafka, etc.)
+# needed to actually write to + materialize the offline store from a plain
+# Python client (no Spark). Without it, inserts fail with "Confluent Kafka not found".
+hopsworks[python]>=5.0,<5.1
 
 # Classical ML
 scikit-learn>=1.4,<1.6
