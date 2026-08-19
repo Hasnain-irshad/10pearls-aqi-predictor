@@ -19,7 +19,7 @@ import pandas as pd
 
 from aqi.config import CITIES
 from aqi.data.openmeteo import fetch_raw
-from aqi.data.store import save_features
+from aqi.data.store import existing_cities, save_features
 from aqi.features.engineering import build_features
 from aqi.utils.logging import get_logger
 
@@ -51,12 +51,25 @@ def _backfill_city(city, start: str, end: str) -> pd.DataFrame:
     return feats
 
 
-def run(*, start: str = "2023-08-01", end: str | None = None, store: bool = True):
+def run(*, start: str = "2023-08-01", end: str | None = None, store: bool = True,
+        resume: bool = True):
     end = end or (date.today() - timedelta(days=2)).isoformat()  # archive lags ~1-2 days
     logger.info("=== Backfill %s -> %s for %d cities ===", start, end, len(CITIES))
 
+    # Resume: skip cities already in the store so a re-run (e.g. after a hung
+    # materialization job or the 6-hour CI cap) only does what's missing.
+    done: set[str] = set()
+    if store and resume:
+        done = existing_cities()
+        if done:
+            logger.info("Resume: %d cities already loaded, will skip: %s",
+                        len(done), ", ".join(sorted(done)))
+
     all_feats = []
     for i, city in enumerate(CITIES, 1):
+        if city.name in done:
+            logger.info("[%d/%d] %s already loaded — skipping.", i, len(CITIES), city.name)
+            continue
         logger.info("[%d/%d] Backfilling %s ...", i, len(CITIES), city.name)
         try:
             feats = _backfill_city(city, start, end)
@@ -82,8 +95,10 @@ def main() -> None:
     p.add_argument("--start", default="2023-08-01")
     p.add_argument("--end", default=None)
     p.add_argument("--no-store", action="store_true")
+    p.add_argument("--no-resume", action="store_true",
+                   help="Process every city even if already in the store (default: skip loaded).")
     args = p.parse_args()
-    run(start=args.start, end=args.end, store=not args.no_store)
+    run(start=args.start, end=args.end, store=not args.no_store, resume=not args.no_resume)
 
 
 if __name__ == "__main__":

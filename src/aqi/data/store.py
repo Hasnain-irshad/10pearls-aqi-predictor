@@ -49,6 +49,21 @@ def save_features(df: pd.DataFrame, *, backend: str | None = None) -> None:
         _save_features_local(df)
 
 
+def existing_cities(*, backend: str | None = None) -> set[str]:
+    """Set of city names already stored (for resuming a partial backfill)."""
+    backend = backend or _default_backend()
+    if backend == "hopsworks" and not _hopsworks_importable():
+        backend = "local"
+    if backend == "hopsworks":
+        from aqi.data.hopsworks_store import existing_cities as _hcities
+        from aqi.data.hopsworks_store import login
+
+        return _hcities(login())
+    if FEATURES_PATH.exists():
+        return set(pd.read_parquet(FEATURES_PATH, columns=["city"])["city"].dropna().unique())
+    return set()
+
+
 def read_features(*, backend: str | None = None) -> pd.DataFrame:
     """Read the full feature table back from the active store."""
     backend = backend or _default_backend()
