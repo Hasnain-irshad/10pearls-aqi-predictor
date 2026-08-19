@@ -117,7 +117,18 @@ def run(*, max_rows: int = 200_000, horizons=DEFAULT_HORIZONS, save: bool = True
         trained_at=datetime.now().isoformat(timespec="seconds"),
     )
     if save:
-        save_model(bundle)
+        # Champion–Challenger gate: log this run to the leaderboard and promote
+        # (ship) the new model only if it beats the current champion's RMSE.
+        from aqi.models.leaderboard import record_run
+
+        decision = record_run(
+            results, best_name,
+            {"trained_at": bundle.trained_at, "n_train": len(train), "n_valid": len(valid)},
+        )
+        if decision["promoted"]:
+            save_model(bundle)  # ship the new champion
+        else:
+            logger.info("Challenger not promoted — keeping the existing champion model on disk.")
         _write_metrics_report(results, best_name, len(train), len(valid))
 
     logger.info("=== Training pipeline done ===")

@@ -42,5 +42,11 @@ def get_history_summary(city: str) -> dict:
     return aqi_tools.get_history_summary(city)
 
 
+@mcp.tool()
+def explain_prediction(city: str) -> dict:
+    """Plain-language SHAP explanation of why a city's forecast is high or low."""
+    return aqi_tools.explain_prediction(city)
+
+
 if __name__ == "__main__":
     mcp.run()  # stdio transport

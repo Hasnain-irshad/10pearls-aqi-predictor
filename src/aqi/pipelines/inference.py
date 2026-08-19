@@ -90,6 +90,17 @@ def forecast_city(city, bundle: ModelBundle, *, horizon_hours: int = 72) -> dict
     alert = check_forecast(city.name, hdf.rename(columns={"aqi": "aqi"}), aqi_col="aqi", time_col="datetime")
     current_aqi = float(anchor["aqi"]) if pd.notna(anchor["aqi"]) else float(preds[0])
 
+    # Plain-language SHAP explanation for the PEAK forecast hour (why it's high/low).
+    explanation = None
+    try:
+        from aqi.models.explain import explain_row
+
+        peak_i = int(np.argmax(preds))
+        explanation = explain_row(X.iloc[peak_i], bundle)
+        explanation["for_time"] = future.iloc[peak_i]["datetime"].isoformat()
+    except Exception as exc:  # never let explainability break the forecast
+        logger.warning("%s explanation skipped: %s", city.name, exc)
+
     return {
         "province": city.province,
         "lat": city.latitude, "lon": city.longitude,
@@ -97,6 +108,7 @@ def forecast_city(city, bundle: ModelBundle, *, horizon_hours: int = 72) -> dict
         "hourly": hourly,
         "daily": daily,
         "alert": alert.as_dict(),
+        "explanation": explanation,
     }
 
 
@@ -118,6 +130,12 @@ def run(*, cities=CITIES, save: bool = True) -> dict:
         ensure_dirs()
         PREDICTIONS_PATH.write_text(json.dumps(out, indent=2))
         logger.info("Wrote %d city forecasts -> %s", len(out["cities"]), PREDICTIONS_PATH)
+        try:  # log forecasts so we can score them against actuals later (monitoring)
+            from aqi.monitoring import log_forecasts
+
+            log_forecasts(out)
+        except Exception as exc:
+            logger.warning("forecast logging skipped: %s", exc)
     logger.info("=== Inference done ===")
     return out
 

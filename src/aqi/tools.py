@@ -49,6 +49,22 @@ def get_forecast(city: str) -> dict:
     }
 
 
+def explain_prediction(city: str) -> dict:
+    """Plain-language SHAP explanation of a city's forecast (why it's high/low)."""
+    data = _load_predictions()
+    if city not in data.get("cities", {}):
+        return {"error": f"No forecast for '{city}'. Use list_cities to see options."}
+    exp = data["cities"][city].get("explanation")
+    if not exp:
+        return {"error": "No explanation available (run the inference pipeline)."}
+    return {
+        "city": city,
+        "explanation": exp["text"],
+        "top_drivers": exp["contributors"],
+        "for_time": exp.get("for_time"),
+    }
+
+
 @lru_cache(maxsize=1)
 def _history() -> pd.DataFrame:
     """Load the historical feature table once (cached in-process)."""
@@ -106,6 +122,16 @@ TOOL_SCHEMAS = [
             "additionalProperties": False,
         },
     },
+    {
+        "name": "explain_prediction",
+        "description": "Explain WHY a city's forecast is high or low, in plain language, from the model's SHAP feature contributions. Use this when the user asks why the AQI is expected to change.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"city": {"type": "string", "description": "City name, e.g. 'Lahore'"}},
+            "required": ["city"],
+            "additionalProperties": False,
+        },
+    },
 ]
 
 # Dispatch table: tool name -> callable.
@@ -113,6 +139,7 @@ TOOL_IMPLS = {
     "list_cities": lambda **kw: list_cities(),
     "get_forecast": lambda city, **kw: get_forecast(city),
     "get_history_summary": lambda city, **kw: get_history_summary(city),
+    "explain_prediction": lambda city, **kw: explain_prediction(city),
 }
 
 
