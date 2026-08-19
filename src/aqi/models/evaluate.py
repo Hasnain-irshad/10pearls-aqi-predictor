@@ -114,6 +114,16 @@ def run(*, max_rows: int = 200_000, n_splits: int = 5):
     fig.savefig(IMG / "walk_forward_backtest.png", dpi=130, bbox_inches="tight"); plt.close(fig)
 
     _write_report(ph, wf)
+    # JSON for the API/dashboard
+    import json
+
+    from aqi.config import PROCESSED_DIR, ensure_dirs
+    ensure_dirs()
+    (PROCESSED_DIR / "evaluation.json").write_text(json.dumps({
+        "per_horizon": ph.to_dict("records"),
+        "walk_forward": wf.to_dict("records"),
+        "backtest_mean_rmse": round(float(wf["rmse"].mean()), 2),
+    }, indent=2, default=str))
     logger.info("Per-horizon + walk-forward evaluation complete.")
     return ph, wf
 
