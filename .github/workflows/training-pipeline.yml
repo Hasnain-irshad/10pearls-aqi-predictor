@@ -43,10 +43,20 @@ jobs:
           HOPSWORKS_PROJECT: ${{ secrets.HOPSWORKS_PROJECT }}
         run: python -m aqi.pipelines.inference
 
-      - name: Commit refreshed predictions
+      - name: Evaluation + drift monitoring
+        env:
+          HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
+          HOPSWORKS_PROJECT: ${{ secrets.HOPSWORKS_PROJECT }}
+        run: |
+          python -m aqi.models.evaluate || echo "eval skipped"
+          python -m aqi.monitoring || echo "monitoring skipped"
+
+      - name: Commit refreshed artifacts
         run: |
           git config user.name "aqi-bot"
           git config user.email "aqi-bot@users.noreply.github.com"
-          git add -f data/processed/predictions.json docs/model_metrics.md
-          git commit -m "chore: refresh forecasts [skip ci]" || echo "no changes"
+          git add -f data/processed/predictions.json data/processed/evaluation.json \
+                     docs/model_metrics.md docs/model_leaderboard.md docs/evaluation.md \
+                     docs/monitoring.md docs/images/*.png
+          git commit -m "chore: refresh forecasts + eval + monitoring [skip ci]" || echo "no changes"
           git push || echo "nothing to push"
