@@ -9,7 +9,7 @@ on:
   workflow_dispatch: {} # allow manual runs from the Actions tab
 
 concurrency:
-  group: feature-pipeline
+  group: hopsworks-write # shared with the backfill so they never write concurrently
   cancel-in-progress: false
 
 jobs:
