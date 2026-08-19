@@ -58,8 +58,13 @@ def get_feature_group(project):
         # Hopsworks 5.0 defaults new feature groups to DELTA, which needs a client
         # 'delta' library that the base pip install doesn't ship -> creation fails.
         # HUDI is materialised server-side (no client lib) and keeps primary-key
-        # upserts (idempotent hourly inserts). This is THE fix for the CI failures.
+        # upserts (idempotent hourly inserts).
         time_travel_format="HUDI",
+        # Disable statistics: the Deequ profiler over 74 columns OOMs the free-tier
+        # Spark executor and fails the materialization job. Stats are cosmetic (UI
+        # only); training reads the data, not the stats. Disabling = the job just
+        # writes rows and finishes green.
+        statistics_config=False,
     )
 
 
