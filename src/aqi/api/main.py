@@ -94,6 +94,70 @@ def predict_on_demand(name: str, lat: float, lon: float, province: str = "Custom
     return {"city": name, **result}
 
 
+@app.get("/api/leaderboard")
+def leaderboard():
+    """Champion–Challenger model leaderboard."""
+    from aqi.models.leaderboard import current_champion, load_leaderboard
+
+    entries = load_leaderboard()
+    return {"champion": current_champion(entries), "entries": entries}
+
+
+@app.get("/api/evaluation")
+def evaluation():
+    """Per-horizon metrics + walk-forward backtest results."""
+    from aqi.config import PROCESSED_DIR
+
+    path = PROCESSED_DIR / "evaluation.json"
+    if not path.exists():
+        raise HTTPException(status_code=503, detail="Run the evaluation module first.")
+    return json.loads(path.read_text())
+
+
+@app.get("/api/monitoring")
+def monitoring():
+    """Data-drift status + forecast-error scoring."""
+    from aqi.monitoring import drift_report, forecast_error_report
+
+    return {"drift": drift_report(), "forecast_error": forecast_error_report()}
+
+
+@app.get("/api/explain/{city}")
+def explain(city: str):
+    """Plain-language SHAP explanation of a city's forecast."""
+    from aqi.tools import explain_prediction
+
+    return explain_prediction(city)
+
+
+@app.get("/api/whatif/defaults")
+def whatif_defaults(city: str, horizon: int = 24):
+    """Current real values for the What-If sliders."""
+    from aqi.whatif import SLIDERS, slider_defaults
+
+    try:
+        return {"sliders": SLIDERS, "defaults": slider_defaults(city, horizon)}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"What-If unavailable: {exc}")
+
+
+class WhatIfRequest(BaseModel):
+    city: str
+    overrides: dict = {}
+    horizon: int = 24
+
+
+@app.post("/api/whatif")
+def whatif(req: WhatIfRequest):
+    """Re-predict AQI under overridden drivers (baseline vs scenario)."""
+    from aqi.whatif import simulate
+
+    try:
+        return simulate(req.city, req.overrides, req.horizon)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Simulation failed: {exc}")
+
+
 class ChatRequest(BaseModel):
     question: str
     history: list[dict] = []
