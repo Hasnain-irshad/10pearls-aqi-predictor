@@ -24,4 +24,10 @@ export const api = {
   city: (name) => get(`/api/predictions/${encodeURIComponent(name)}`),
   categories: () => get("/api/categories"),
   chat: (question, history) => post("/api/chat", { question, history }),
+  leaderboard: () => get("/api/leaderboard"),
+  evaluation: () => get("/api/evaluation"),
+  monitoring: () => get("/api/monitoring"),
+  explain: (city) => get(`/api/explain/${encodeURIComponent(city)}`),
+  whatifDefaults: (city) => get(`/api/whatif/defaults?city=${encodeURIComponent(city)}`),
+  whatif: (city, overrides, horizon = 24) => post("/api/whatif", { city, overrides, horizon }),
 };
