@@ -58,24 +58,34 @@ export default function ForecastChart({ city, view }) {
       </div>
       <ResponsiveContainer width="100%" height={320}>
         <ComposedChart data={data} margin={{ top: 10, right: 16, bottom: 0, left: -12 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#2a2f3a" />
+          <defs>
+            <linearGradient id="aqiFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.35} />
+              <stop offset="100%" stopColor="#2dd4bf" stopOpacity={0.02} />
+            </linearGradient>
+            <linearGradient id="aqiLine" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#22d3ee" />
+              <stop offset="100%" stopColor="#2dd4bf" />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
           <XAxis
             dataKey="label"
-            tick={{ fontSize: 11, fill: "#9aa4b2" }}
+            tick={{ fontSize: 11, fill: "#8a97a8" }}
             interval={view === "hourly" ? 5 : 0}
           />
-          <YAxis tick={{ fontSize: 11, fill: "#9aa4b2" }} domain={[0, "auto"]} />
+          <YAxis tick={{ fontSize: 11, fill: "#8a97a8" }} domain={[0, "auto"]} />
           <Tooltip content={<CustomTooltip />} />
-          <ReferenceLine y={100} stroke="#ffde33" strokeDasharray="4 4" />
-          <ReferenceLine y={150} stroke="#ff9933" strokeDasharray="4 4" />
-          <ReferenceLine y={200} stroke="#ff5050" strokeDasharray="4 4" />
-          <Area dataKey="range" stroke="none" fill="#4aa3df" fillOpacity={0.18} />
+          <ReferenceLine y={100} stroke="#ffde33" strokeDasharray="4 4" strokeOpacity={0.6} />
+          <ReferenceLine y={150} stroke="#ff9933" strokeDasharray="4 4" strokeOpacity={0.6} />
+          <ReferenceLine y={200} stroke="#ff5050" strokeDasharray="4 4" strokeOpacity={0.6} />
+          <Area dataKey="range" stroke="none" fill="url(#aqiFill)" />
           <Line
             dataKey="aqi"
-            stroke="#4aa3df"
-            strokeWidth={2.5}
+            stroke="url(#aqiLine)"
+            strokeWidth={3}
             dot={view === "daily"}
-            activeDot={{ r: 5 }}
+            activeDot={{ r: 6, fill: "#22d3ee", stroke: "#fff", strokeWidth: 2 }}
           />
         </ComposedChart>
       </ResponsiveContainer>

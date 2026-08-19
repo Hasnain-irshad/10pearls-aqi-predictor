@@ -51,14 +51,14 @@ export default function ModelEvalPage() {
           <p className="muted-line">RMSE grows the further ahead we predict — and beats the persistence baseline at every horizon.</p>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={ev.per_horizon} margin={{ top: 8, right: 16, left: -8, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#2a2f3a" />
-              <XAxis dataKey="horizon_h" tick={{ fontSize: 11, fill: "#9aa4b2" }}
-                     label={{ value: "hours ahead", position: "insideBottom", offset: -2, fill: "#9aa4b2", fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11, fill: "#9aa4b2" }} />
-              <Tooltip contentStyle={{ background: "#0b0e13", border: "1px solid #2a2f3a" }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" />
+              <XAxis dataKey="horizon_h" tick={{ fontSize: 11, fill: "#8a97a8" }}
+                     label={{ value: "hours ahead", position: "insideBottom", offset: -2, fill: "#8a97a8", fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11, fill: "#8a97a8" }} />
+              <Tooltip contentStyle={{ background: "rgba(8,11,16,0.92)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 10 }} />
               <Legend />
-              <Line dataKey="rmse" name="XGBoost RMSE" stroke="#4aa3df" strokeWidth={2.5} />
-              <Line dataKey="baseline_rmse" name="Baseline RMSE" stroke="#e34a33" strokeDasharray="5 4" strokeWidth={2} />
+              <Line dataKey="rmse" name="XGBoost RMSE" stroke="#22d3ee" strokeWidth={3} dot={{ r: 3, fill: "#22d3ee" }} activeDot={{ r: 6, stroke: "#fff", strokeWidth: 2 }} />
+              <Line dataKey="baseline_rmse" name="Baseline RMSE" stroke="#a78bfa" strokeDasharray="5 4" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>

@@ -4,20 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="3-day Air Quality Index forecasts for cities across Pakistan." />
-    <meta name="theme-color" content="#0e1116" />
-    <link rel="icon" type="image/png" href="/10pearls-logo.png" />
-    <link rel="apple-touch-icon" href="/10pearls-logo.png" />
+    <meta name="theme-color" content="#080b10" />
+    <link rel="icon" type="image/png" href="/logo-round.png" />
+    <link rel="apple-touch-icon" href="/logo-round.png" />
     <title>Pearls AQI Predictor</title>
     <style>
       /* Pre-JS paint — matches the React SplashScreen so they crossfade cleanly */
       #splash {
         position: fixed; inset: 0; display: flex;
         align-items: center; justify-content: center;
-        background: radial-gradient(1200px 600px at 50% 32%, #161c26 0%, #0e1116 60%);
+        background:
+          radial-gradient(900px 520px at 30% 20%, rgba(34,211,238,.10) 0%, transparent 60%),
+          radial-gradient(900px 520px at 75% 80%, rgba(45,212,191,.10) 0%, transparent 60%),
+          #080b10;
         z-index: 9999;
       }
       #splash img {
-        width: 240px; max-width: 62vw; height: auto;
+        width: 150px; height: 150px; border-radius: 50%;
+        box-shadow: 0 0 0 1px rgba(255,255,255,.10), 0 20px 60px rgba(0,0,0,.5),
+          0 0 60px rgba(34,211,238,.28);
         animation: splashLogoIn 0.9s cubic-bezier(.2,.7,.2,1) both;
       }
       @keyframes splashLogoIn {
@@ -29,7 +34,7 @@
   <body>
     <div id="root"></div>
     <div id="splash">
-      <img src="/10pearls-logo.png" alt="10Pearls" />
+      <img src="/logo-round.png" alt="10Pearls" />
     </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
