@@ -9,31 +9,27 @@
     <link rel="apple-touch-icon" href="/10pearls-logo.png" />
     <title>Pearls AQI Predictor</title>
     <style>
-      /* Instant splash — shown before the React bundle loads, then replaced */
+      /* Pre-JS paint — matches the React SplashScreen so they crossfade cleanly */
       #splash {
-        position: fixed; inset: 0; display: flex; flex-direction: column;
-        align-items: center; justify-content: center; gap: 22px;
-        background: #0e1116; z-index: 9999;
+        position: fixed; inset: 0; display: flex;
+        align-items: center; justify-content: center;
+        background: radial-gradient(1200px 600px at 50% 32%, #161c26 0%, #0e1116 60%);
+        z-index: 9999;
       }
-      #splash img { width: 220px; max-width: 60vw; height: auto; }
-      #splash .spinner {
-        width: 34px; height: 34px; border-radius: 50%;
-        border: 3px solid #2a2f3a; border-top-color: #4aa3df;
-        animation: spin 0.8s linear infinite;
+      #splash img {
+        width: 240px; max-width: 62vw; height: auto;
+        animation: splashLogoIn 0.9s cubic-bezier(.2,.7,.2,1) both;
       }
-      #splash .splash-text {
-        color: #9aa4b2; font: 14px "Segoe UI", system-ui, sans-serif;
-        letter-spacing: 0.3px;
+      @keyframes splashLogoIn {
+        from { opacity: 0; transform: scale(.8) translateY(10px); }
+        to   { opacity: 1; transform: scale(1) translateY(0); }
       }
-      @keyframes spin { to { transform: rotate(360deg); } }
     </style>
   </head>
   <body>
     <div id="root"></div>
     <div id="splash">
       <img src="/10pearls-logo.png" alt="10Pearls" />
-      <div class="spinner"></div>
-      <div class="splash-text">Loading Pearls AQI Predictor…</div>
     </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

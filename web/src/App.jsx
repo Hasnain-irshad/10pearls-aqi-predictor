@@ -12,6 +12,9 @@ import ExplanationCard from "./components/ExplanationCard.jsx";
 import ModelEvalPage from "./pages/ModelEvalPage.jsx";
 import MonitoringPage from "./pages/MonitoringPage.jsx";
 import WhatIfPage from "./pages/WhatIfPage.jsx";
+import SplashScreen from "./components/SplashScreen.jsx";
+
+const SPLASH_MIN_MS = 2200; // minimum time the intro animation stays on screen
 
 const TABS = [
   { id: "forecast", label: "🌫️ Forecast" },
@@ -26,6 +29,8 @@ export default function App() {
   const [view, setView] = useState("hourly");
   const [tab, setTab] = useState("forecast");
   const [error, setError] = useState(null);
+  const [splash, setSplash] = useState("in"); // "in" -> "leaving" -> "done"
+  const [minElapsed, setMinElapsed] = useState(false);
 
   useEffect(() => {
     api.predictions()
@@ -37,11 +42,29 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Keep the intro up for a minimum time so the animation is actually seen.
+  useEffect(() => {
+    const t = setTimeout(() => setMinElapsed(true), SPLASH_MIN_MS);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Once the min time has passed AND data (or an error) is in, fade the intro out.
+  useEffect(() => {
+    if (splash !== "in") return;
+    if (minElapsed && (data || error)) {
+      setSplash("leaving");
+      const t = setTimeout(() => setSplash("done"), 650);
+      return () => clearTimeout(t);
+    }
+  }, [splash, minElapsed, data, error]);
+
   const cityNames = useMemo(() => (data ? Object.keys(data.cities) : []), [data]);
   const city = data?.cities?.[selected];
 
   return (
     <div className="app">
+      {splash !== "done" && <SplashScreen leaving={splash === "leaving"} />}
+
       <Header generatedAt={data?.generated_at} />
 
       <nav className="tabs">
