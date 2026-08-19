@@ -58,7 +58,13 @@ export default function App() {
           <code>uvicorn aqi.api.main:app --port 8000</code>.
         </div>
       )}
-      {!data && !error && <div className="notice">Loading forecasts…</div>}
+      {!data && !error && (
+        <div className="app-loading">
+          <img src="/10pearls-logo.png" alt="10Pearls" />
+          <div className="spinner" />
+          <div className="loading-text">Loading forecasts…</div>
+        </div>
+      )}
 
       {/* ---- Forecast tab ---- */}
       {data && tab === "forecast" && (
@@ -96,8 +102,11 @@ export default function App() {
       )}
 
       <footer className="footer">
-        Built for the 10Pearls Data Science Internship · {cityNames.length} cities · Data: Open-Meteo ·
-        Champion model: global XGBoost · Feature store: Hopsworks
+        <img className="footer-logo" src="/10pearls-logo.png" alt="10Pearls" />
+        <div>
+          Built for the 10Pearls Data Science Internship · {cityNames.length} cities · Data: Open-Meteo ·
+          Champion model: global XGBoost · Feature store: Hopsworks
+        </div>
       </footer>
     </div>
   );
