@@ -63,18 +63,20 @@ def get_feature_group(project):
     )
 
 
-def insert_features(project, df: pd.DataFrame, *, wait: bool = False) -> None:
-    """Upsert features. wait_for_job=False (default) is fire-and-forget: the row
-    upload returns immediately and Hopsworks materialises the offline store in a
-    background job. On the free Serverless tier that job is slow, so *waiting* on
-    it makes each insert take minutes (and time out CI). Non-blocking is the
-    standard pattern for frequent/large inserts; the data still lands."""
+def insert_features(project, df: pd.DataFrame, *, wait: bool = True) -> None:
+    """Upsert features and WAIT for the offline materialization job to finish.
+
+    We block (wait_for_job=True) so the run only reports success once the rows
+    are actually queryable (Data Preview + statistics populated) — otherwise a
+    pipeline can 'succeed' while the data never materialised. (The earlier
+    non-blocking setting was a workaround for the DELTA feature-group bug, which
+    is now fixed by using HUDI, so blocking is correct again.)"""
     fg = get_feature_group(project)
     clean = _sanitize(df)
     logger.info("Inserting %d rows into feature group '%s' (wait_for_job=%s)...",
                 len(clean), HOPSWORKS.feature_group_name, wait)
     fg.insert(clean, write_options={"wait_for_job": wait})
-    logger.info("Insert submitted.")
+    logger.info("Insert complete (materialization confirmed).")
 
 
 def get_feature_view(project):
