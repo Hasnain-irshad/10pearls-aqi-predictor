@@ -103,10 +103,12 @@ class HopsworksConfig:
     project: str = _get("HOPSWORKS_PROJECT", "aqi_predictor")
 
     # Feature Store object names (kept stable across the whole project).
+    # v2: fresh feature group with statistics disabled (v1 had stats on, which
+    # OOM'd the free-tier materialization job).
     feature_group_name: str = "aqi_features"
-    feature_group_version: int = 1
+    feature_group_version: int = 2
     feature_view_name: str = "aqi_feature_view"
-    feature_view_version: int = 1
+    feature_view_version: int = 2
     model_name: str = "aqi_forecaster"
 
 
