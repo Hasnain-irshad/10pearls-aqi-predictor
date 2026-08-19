@@ -529,6 +529,56 @@ AI tools"; we expose our forecast system as a set of MCP tools.
 - *How do you stop it from hallucinating AQI?* → It has no numbers of its own —
   it must call `get_forecast`, which returns our real model output.
 
+## 15c. Competition Differentiators (the "ML product" layer)
+
+These are the features that lift the project from "a model" to a self-monitoring
+ML product. Each maps to the improvement blueprint.
+
+### Champion–Challenger + Model Leaderboard (`models/leaderboard.py`)
+Every training run logs its candidates to a persistent **leaderboard** (version,
+model, RMSE/MAE/R², timestamp). The best candidate is the **challenger**, and it
+is **promoted to champion only if it beats the current champion's validation
+RMSE** — a new model never ships just for being newer. Current champion: **v1
+XGBoost, RMSE 20.6**. *This is a real MLOps lifecycle, which almost no student
+project has.*
+
+### Per-horizon evaluation + walk-forward backtesting (`models/evaluate.py`)
+- **Per-horizon:** RMSE grows honestly with lead time — **+1h R² 0.98 → +72h R²
+  0.65**, and beats the persistence baseline at *every* horizon.
+- **Walk-forward backtest:** 5 rolling time folds (mean RMSE ~21) — always train
+  on the past, test on the future. This is the correct way to estimate real
+  forward performance and catches leakage a single split misses.
+
+### SHAP → natural-language explanations (`models/explain.py`)
+Beyond the global SHAP plot: for **each city's forecast** we compute per-instance
+SHAP and phrase it in plain English — e.g. *"Forecast AQI ≈ 153 (baseline 110);
+main drivers: current AQI +18, feels-like temp +5, time of day +5."* Surfaced in
+the dashboard **and** as an MCP/advisor tool (`explain_prediction`).
+
+### What-If Simulator (`whatif.py`)
+Sliders for current PM2.5, wind, humidity, temperature → the model **re-predicts**
+and shows baseline vs scenario (e.g. stronger wind + lower PM2.5 → AQI 128→121).
+Clearly labeled a *model simulation*, not causal proof. The most memorable
+live-demo feature.
+
+### Self-monitoring: drift + forecast-error (`monitoring.py`)
+- **Drift:** Population Stability Index per feature (recent vs training). It
+  correctly flags **significant** drift right now (summer data vs all-season
+  training — temperature PSI ≈ 3.9), the signal that would trigger a retrain.
+- **Forecast-error tracking:** every inference run logs its forecasts; once the
+  real AQI arrives, we join and score them, and **auto-flag the biggest misses**
+  for investigation — a system that learns from its own failures.
+
+**Interview Q&A:**
+- *How do you decide which model goes to production?* → The champion–challenger
+  gate: promote only if it beats the champion on walk-forward RMSE.
+- *Why per-horizon metrics?* → A single averaged number hides that +72h is far
+  harder than +1h; for a 3-day forecast the horizon breakdown is the real story.
+- *How would you know when to retrain?* → Drift (PSI) crossing a threshold, and
+  rising forecast error on the monitoring page — not a fixed schedule.
+- *Isn't the What-If simulator misleading?* → It's explicitly a model simulation,
+  not causal inference — a way to probe the model's learned relationships.
+
 ## 16. General / Behavioral Questions
 
 - **"Walk me through your project."** → Use the architecture diagram: four
