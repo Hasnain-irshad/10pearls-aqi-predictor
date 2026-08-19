@@ -15,6 +15,10 @@ on:
         required: true
         default: "2023-01-01" # full ~3.5-year history (matches the local dataset)
 
+concurrency:
+  group: hopsworks-write # shared with the hourly pipeline so writes never overlap
+  cancel-in-progress: false
+
 jobs:
   backfill:
     runs-on: ubuntu-latest
