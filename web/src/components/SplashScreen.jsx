@@ -3,8 +3,13 @@
 export default function SplashScreen({ leaving }) {
   return (
     <div className={`splash-screen${leaving ? " leaving" : ""}`}>
+      <div className="splash-aurora" aria-hidden="true" />
       <div className="splash-inner">
-        <img className="splash-logo" src="/10pearls-logo.png" alt="10Pearls" />
+        <div className="splash-badge">
+          <span className="splash-ring" />
+          <span className="splash-ring splash-ring-2" />
+          <img className="splash-logo" src="/logo-round.png" alt="10Pearls" />
+        </div>
         <h2 className="splash-title">Pearls AQI Predictor</h2>
         <p className="splash-sub">3-day air quality forecasts across Pakistan</p>
         <div className="splash-dots" aria-hidden="true">

@@ -2,8 +2,9 @@ export default function Header({ generatedAt }) {
   return (
     <header className="header">
       <div className="brand">
-        <img className="brand-logo" src="/10pearls-logo.png" alt="10Pearls" />
-        <div className="brand-divider" />
+        <div className="brand-badge">
+          <img className="brand-logo" src="/logo-round.png" alt="10Pearls" />
+        </div>
         <div>
           <h1>Pearls AQI Predictor</h1>
           <p className="tagline">3-day air quality forecasts across Pakistan</p>

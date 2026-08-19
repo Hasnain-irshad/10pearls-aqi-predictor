@@ -83,7 +83,7 @@ export default function App() {
       )}
       {!data && !error && (
         <div className="app-loading">
-          <img src="/10pearls-logo.png" alt="10Pearls" />
+          <img src="/logo-round.png" alt="10Pearls" />
           <div className="spinner" />
           <div className="loading-text">Loading forecasts…</div>
         </div>
@@ -125,7 +125,7 @@ export default function App() {
       )}
 
       <footer className="footer">
-        <img className="footer-logo" src="/10pearls-logo.png" alt="10Pearls" />
+        <img className="footer-logo" src="/logo-wordmark-light.png" alt="10Pearls" />
         <div>
           Built for the 10Pearls Data Science Internship · {cityNames.length} cities · Data: Open-Meteo ·
           Champion model: global XGBoost · Feature store: Hopsworks
