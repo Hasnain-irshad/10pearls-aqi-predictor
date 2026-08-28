@@ -1,0 +1,14 @@
+# Keep the backend image slim + the build context small.
+.git
+web
+tests
+notebooks
+**/__pycache__
+*.pyc
+*.parquet
+data/raw
+*.docx
+.venv
+.env
+.env.*
+docs/images

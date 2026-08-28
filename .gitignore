@@ -49,3 +49,13 @@ docs/report/*.out
 
 # Reference / answer-key code (not part of the submission)
 reference/
+
+# ---- Deploy artifacts that MUST ship (railway up + git honor .gitignore) ----
+# These are committed on purpose; negations must come last to win over the
+# data/processed/*, models_local/*, and *.joblib patterns above.
+!data/processed/predictions.json
+!data/processed/evaluation.json
+!data/processed/monitoring.json
+!models_local/leaderboard.json
+!models_local/aqi_model.joblib
+!models_local/aqi_model_meta.json
