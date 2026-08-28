@@ -56,6 +56,7 @@ jobs:
           git config user.name "aqi-bot"
           git config user.email "aqi-bot@users.noreply.github.com"
           git add -f data/processed/predictions.json data/processed/evaluation.json \
+                     models_local/leaderboard.json \
                      docs/model_metrics.md docs/model_leaderboard.md docs/evaluation.md \
                      docs/monitoring.md docs/images/*.png
           git commit -m "chore: refresh forecasts + eval + monitoring [skip ci]" || echo "no changes"
