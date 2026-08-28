@@ -107,6 +107,24 @@ def existing_cities(project) -> set[str]:
         return set()
 
 
+def city_coverage(project) -> dict:
+    """Return {city: earliest date present} in the feature group.
+
+    Used for a *history-aware* resume: a city is only "done" if its data reaches
+    back to the requested start date. This distinguishes a fully-backfilled city
+    from one that merely has recent rows from the hourly feature pipeline. Reads
+    only ``city`` + event-time columns and is best-effort (empty dict on error)."""
+    fg = get_feature_group(project)
+    try:
+        df = fg.select(["city", EVENT_TIME]).read()
+        df[EVENT_TIME] = pd.to_datetime(df[EVENT_TIME])
+        mins = df.groupby("city")[EVENT_TIME].min()
+        return {city: ts.date() for city, ts in mins.items()}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not read city coverage (%s); will not skip any.", exc)
+        return {}
+
+
 def get_feature_view(project):
     fs = project.get_feature_store()
     fg = get_feature_group(project)

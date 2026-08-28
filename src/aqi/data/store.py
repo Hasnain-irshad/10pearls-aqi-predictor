@@ -64,6 +64,23 @@ def existing_cities(*, backend: str | None = None) -> set[str]:
     return set()
 
 
+def city_coverage(*, backend: str | None = None) -> dict:
+    """{city: earliest date present}, for a history-aware backfill resume."""
+    backend = backend or _default_backend()
+    if backend == "hopsworks" and not _hopsworks_importable():
+        backend = "local"
+    if backend == "hopsworks":
+        from aqi.data.hopsworks_store import city_coverage as _hcov
+        from aqi.data.hopsworks_store import login
+
+        return _hcov(login())
+    if FEATURES_PATH.exists():
+        df = pd.read_parquet(FEATURES_PATH, columns=["city", "datetime"])
+        df["datetime"] = pd.to_datetime(df["datetime"])
+        return {c: t.date() for c, t in df.groupby("city")["datetime"].min().items()}
+    return {}
+
+
 def read_features(*, backend: str | None = None) -> pd.DataFrame:
     """Read the full feature table back from the active store."""
     backend = backend or _default_backend()

@@ -19,7 +19,7 @@ import pandas as pd
 
 from aqi.config import CITIES
 from aqi.data.openmeteo import fetch_raw
-from aqi.data.store import existing_cities, save_features
+from aqi.data.store import city_coverage, save_features
 from aqi.features.engineering import build_features
 from aqi.utils.logging import get_logger
 
@@ -56,14 +56,22 @@ def run(*, start: str = "2023-08-01", end: str | None = None, store: bool = True
     end = end or (date.today() - timedelta(days=2)).isoformat()  # archive lags ~1-2 days
     logger.info("=== Backfill %s -> %s for %d cities ===", start, end, len(CITIES))
 
-    # Resume: skip cities already in the store so a re-run (e.g. after a hung
-    # materialization job or the 6-hour CI cap) only does what's missing.
+    # History-aware resume: skip a city only if its data already reaches back to
+    # `start`. A city with merely recent rows (e.g. from the hourly feature
+    # pipeline) is NOT considered done and gets fully backfilled. This makes a
+    # re-run finish only what's missing, safely (idempotent upserts).
     done: set[str] = set()
     if store and resume:
-        done = existing_cities()
+        start_date = datetime.strptime(start, "%Y-%m-%d").date()
+        coverage = city_coverage()  # {city: earliest date present}
+        done = {c for c, earliest in coverage.items() if earliest is not None and earliest <= start_date}
+        partial = {c for c in coverage if c not in done}
         if done:
-            logger.info("Resume: %d cities already loaded, will skip: %s",
-                        len(done), ", ".join(sorted(done)))
+            logger.info("Resume: %d cities already have full history to %s, skipping: %s",
+                        len(done), start, ", ".join(sorted(done)))
+        if partial:
+            logger.info("%d cities have only partial/recent data and WILL be backfilled: %s",
+                        len(partial), ", ".join(sorted(partial)))
 
     all_feats = []
     for i, city in enumerate(CITIES, 1):
