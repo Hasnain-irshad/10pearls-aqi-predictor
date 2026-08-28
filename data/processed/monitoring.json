@@ -1,0 +1,50 @@
+{
+  "drift": {
+    "recent_days": 14,
+    "reference_rows": 689546,
+    "recent_rows": 7414,
+    "overall_status": "significant",
+    "worst_feature": "temperature_2m",
+    "features": [
+      {
+        "feature": "aqi",
+        "psi": 0.303,
+        "status": "significant"
+      },
+      {
+        "feature": "pm2_5",
+        "psi": 0.257,
+        "status": "significant"
+      },
+      {
+        "feature": "pm10",
+        "psi": 0.031,
+        "status": "stable"
+      },
+      {
+        "feature": "temperature_2m",
+        "psi": 3.942,
+        "status": "significant"
+      },
+      {
+        "feature": "relative_humidity_2m",
+        "psi": 0.393,
+        "status": "significant"
+      },
+      {
+        "feature": "wind_speed_10m",
+        "psi": 0.014,
+        "status": "stable"
+      },
+      {
+        "feature": "surface_pressure",
+        "psi": 1.253,
+        "status": "significant"
+      }
+    ]
+  },
+  "forecast_error": {
+    "status": "forecasts logged; waiting for actuals to arrive",
+    "scored": 0
+  }
+}

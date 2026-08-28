@@ -24,6 +24,7 @@ logger = get_logger("monitoring")
 
 FORECAST_LOG = PROCESSED_DIR / "forecast_log.parquet"
 DRIFT_REPORT = PROJECT_ROOT / "docs" / "monitoring.md"
+MONITORING_JSON = PROCESSED_DIR / "monitoring.json"
 
 DRIFT_FEATURES = [
     "aqi", "pm2_5", "pm10", "temperature_2m",
@@ -137,6 +138,20 @@ def _write_drift_md(report: dict) -> None:
     DRIFT_REPORT.write_text("\n".join(lines), encoding="utf-8")
 
 
+def snapshot() -> dict:
+    """Compute the full monitoring payload and persist it as a committed JSON +
+    markdown snapshot, so a deployed backend can serve it without a live
+    Feature Store connection."""
+    report = {"drift": drift_report(), "forecast_error": forecast_error_report()}
+    ensure_dirs()
+    MONITORING_JSON.write_text(json.dumps(report, indent=2, default=str))
+    try:
+        _write_drift_md(report["drift"])
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not write drift markdown (%s).", exc)
+    logger.info("Wrote monitoring snapshot -> %s", MONITORING_JSON.name)
+    return report
+
+
 if __name__ == "__main__":
-    print(json.dumps(drift_report(), indent=2))
-    print(json.dumps(forecast_error_report(), indent=2, default=str))
+    print(json.dumps(snapshot(), indent=2, default=str))

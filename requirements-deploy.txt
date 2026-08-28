@@ -1,0 +1,27 @@
+# ============================================================
+#  Slim runtime deps for the DEPLOYED FastAPI backend (Railway).
+#  Deliberately excludes hopsworks / tensorflow / matplotlib / seaborn / mcp so
+#  the image stays small and the build is fast. At runtime the API:
+#   * serves the committed predictions/eval/leaderboard/monitoring JSON, and
+#   * loads the model from the committed local bundle (models_local/), so no
+#     Feature Store / Model Registry connection is needed to serve traffic.
+#  (Set HOPSWORKS_API_KEY on the service to load the champion from the registry
+#   instead — but that also requires adding `hopsworks[python]` back here.)
+# ============================================================
+fastapi>=0.110
+uvicorn[standard]>=0.29
+
+# data + model runtime
+pandas>=2.1,<2.3
+numpy>=1.26,<2.1
+requests>=2.31
+python-dotenv>=1.0
+scikit-learn>=1.4,<1.6
+xgboost>=2.0,<3.0
+joblib>=1.3
+
+# explainability (What-If / SHAP explanation endpoints)
+shap>=0.44
+
+# LLM advisor (needs ANTHROPIC_API_KEY at runtime)
+anthropic>=0.40

@@ -116,10 +116,26 @@ def evaluation():
 
 @app.get("/api/monitoring")
 def monitoring():
-    """Data-drift status + forecast-error scoring."""
-    from aqi.monitoring import drift_report, forecast_error_report
+    """Data-drift status + forecast-error scoring.
 
-    return {"drift": drift_report(), "forecast_error": forecast_error_report()}
+    Prefers the committed snapshot (written by the training pipeline) so a slim
+    deployment serves it without a live Feature Store connection; falls back to
+    computing live, then to a friendly placeholder so the tab never hard-fails.
+    """
+    from aqi.config import PROCESSED_DIR
+
+    snap = PROCESSED_DIR / "monitoring.json"
+    if snap.exists():
+        return json.loads(snap.read_text())
+    try:
+        from aqi.monitoring import drift_report, forecast_error_report
+
+        return {"drift": drift_report(), "forecast_error": forecast_error_report()}
+    except Exception:  # noqa: BLE001
+        return {
+            "drift": {"recent_days": 0, "overall_status": "stable", "worst_feature": None, "features": []},
+            "forecast_error": {"status": "monitoring runs in the training pipeline; a snapshot will appear after the next run"},
+        }
 
 
 @app.get("/api/explain/{city}")
