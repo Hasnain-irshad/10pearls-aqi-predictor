@@ -108,8 +108,11 @@ def time_split(sup: pd.DataFrame, *, valid_frac: float = 0.2) -> tuple[pd.DataFr
     The most recent ``valid_frac`` of time becomes validation, so we always test
     on the future relative to training — the only honest way to score a forecaster.
     """
-    cutoff = sup["datetime"].quantile(1 - valid_frac)
-    train = sup[sup["datetime"] <= cutoff].reset_index(drop=True)
-    valid = sup[sup["datetime"] > cutoff].reset_index(drop=True)
+    # Coerce to datetime locally so the split is correct regardless of how the
+    # store returned the column (Hopsworks hands it back as strings).
+    dt = pd.to_datetime(sup["datetime"])
+    cutoff = dt.quantile(1 - valid_frac)
+    train = sup[dt <= cutoff].reset_index(drop=True)
+    valid = sup[dt > cutoff].reset_index(drop=True)
     logger.info("Time split at %s -> train=%d, valid=%d", cutoff, len(train), len(valid))
     return train, valid

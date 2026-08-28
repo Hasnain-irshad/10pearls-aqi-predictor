@@ -139,4 +139,7 @@ def get_feature_view(project):
 def read_features(project) -> pd.DataFrame:
     fv = get_feature_view(project)
     df, _ = fv.training_data(description="full read")
+    # Hopsworks returns the event-time column as strings; downstream code (time
+    # split, drift windows, inference sorting) needs real datetimes.
+    df[EVENT_TIME] = pd.to_datetime(df[EVENT_TIME], errors="coerce")
     return df.sort_values(EVENT_TIME).reset_index(drop=True)
