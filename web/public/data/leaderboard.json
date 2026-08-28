@@ -1,0 +1,107 @@
+[
+  {
+    "version": 1,
+    "trained_at": "2026-08-19T17:32:44",
+    "model": "XGBoost",
+    "rmse": 20.597,
+    "mae": 11.802,
+    "r2": 0.824,
+    "n_train": 160000,
+    "n_valid": 40000,
+    "candidates": {
+      "Persistence (baseline)": {
+        "rmse": 27.84,
+        "mae": 15.178,
+        "r2": 0.679
+      },
+      "Ridge": {
+        "rmse": 25.186,
+        "mae": 15.567,
+        "r2": 0.738
+      },
+      "RandomForest": {
+        "rmse": 22.039,
+        "mae": 12.897,
+        "r2": 0.799
+      },
+      "XGBoost": {
+        "rmse": 20.597,
+        "mae": 11.802,
+        "r2": 0.824
+      }
+    },
+    "is_champion": false,
+    "promoted": true,
+    "prev_champion_rmse": null
+  },
+  {
+    "version": 2,
+    "trained_at": "2026-08-28T14:28:41",
+    "model": "XGBoost",
+    "rmse": 19.687,
+    "mae": 12.804,
+    "r2": 0.85,
+    "n_train": 160002,
+    "n_valid": 39998,
+    "candidates": {
+      "Persistence (baseline)": {
+        "rmse": 25.269,
+        "mae": 15.711,
+        "r2": 0.752
+      },
+      "Ridge": {
+        "rmse": 22.854,
+        "mae": 16.014,
+        "r2": 0.797
+      },
+      "RandomForest": {
+        "rmse": 20.384,
+        "mae": 13.563,
+        "r2": 0.839
+      },
+      "XGBoost": {
+        "rmse": 19.687,
+        "mae": 12.804,
+        "r2": 0.85
+      }
+    },
+    "is_champion": true,
+    "promoted": true,
+    "prev_champion_rmse": 20.597
+  },
+  {
+    "version": 3,
+    "trained_at": "2026-08-28T15:28:19",
+    "model": "XGBoost",
+    "rmse": 19.687,
+    "mae": 12.804,
+    "r2": 0.85,
+    "n_train": 160002,
+    "n_valid": 39998,
+    "candidates": {
+      "Persistence (baseline)": {
+        "rmse": 25.269,
+        "mae": 15.711,
+        "r2": 0.752
+      },
+      "Ridge": {
+        "rmse": 22.854,
+        "mae": 16.014,
+        "r2": 0.797
+      },
+      "RandomForest": {
+        "rmse": 20.384,
+        "mae": 13.563,
+        "r2": 0.839
+      },
+      "XGBoost": {
+        "rmse": 19.687,
+        "mae": 12.804,
+        "r2": 0.85
+      }
+    },
+    "is_champion": false,
+    "promoted": false,
+    "prev_champion_rmse": 19.687
+  }
+]

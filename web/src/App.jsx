@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { api } from "./api";
+import { api, STATIC_MODE } from "./api";
 import Header from "./components/Header.jsx";
 import CitySelect from "./components/CitySelect.jsx";
 import CurrentCard from "./components/CurrentCard.jsx";
@@ -20,7 +20,8 @@ const TABS = [
   { id: "forecast", label: "🌫️ Forecast" },
   { id: "eval", label: "🏆 Model Evaluation" },
   { id: "monitoring", label: "🌊 Monitoring" },
-  { id: "whatif", label: "🎛️ What-If" },
+  // What-If needs the live backend; hidden in the static demo.
+  ...(STATIC_MODE ? [] : [{ id: "whatif", label: "🎛️ What-If" }]),
 ];
 
 export default function App() {
@@ -110,7 +111,7 @@ export default function App() {
               <aside className="col-side">
                 <PakistanMap cities={data.cities} selected={selected} onSelect={setSelected} />
                 <Legend />
-                <ChatPanel city={selected} />
+                {!STATIC_MODE && <ChatPanel city={selected} />}
               </aside>
             </div>
           )}
