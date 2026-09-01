@@ -1,0 +1,105 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="_style.css"></head>
+<body><div id="canvas">
+<svg width="1120" height="700" viewBox="0 0 1120 700">
+  <defs>
+    <marker id="a" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#2C6FB5"/></marker>
+    <marker id="g" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#2E7D52"/></marker>
+    <marker id="o" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#C8881A"/></marker>
+  </defs>
+  <text x="560" y="32" text-anchor="middle" class="t-title">Deployment View and the Two Serving Modes</text>
+
+  <!-- repo node -->
+  <rect x="30" y="70" width="250" height="196" rx="12" fill="#F7FAFD" stroke="#1F3A5F" stroke-width="2"/>
+  <rect x="30" y="70" width="250" height="32" rx="12" fill="#1F3A5F"/>
+  <rect x="30" y="86" width="250" height="16" fill="#1F3A5F"/>
+  <text x="155" y="92" text-anchor="middle" class="t-h" style="fill:#fff">GitHub repository</text>
+  <text x="46" y="126" class="t-s">source of the Python package</text>
+  <text x="46" y="148" class="t-s">and the React application</text>
+  <text x="46" y="176" class="t-b">Committed artefacts</text>
+  <text x="46" y="196" class="t-s">predictions.json &#183; evaluation.json</text>
+  <text x="46" y="214" class="t-s">monitoring.json &#183; leaderboard.json</text>
+  <text x="46" y="232" class="t-s">aqi_model.joblib</text>
+  <text x="46" y="254" class="t-s">refreshed by the daily workflow</text>
+
+  <!-- actions node -->
+  <rect x="30" y="292" width="250" height="150" rx="12" fill="#FBEEDF" stroke="#C8881A" stroke-width="2"/>
+  <text x="155" y="320" text-anchor="middle" class="t-h" fill="#8a5e12">GitHub Actions runners</text>
+  <text x="46" y="348" class="t-s">ubuntu-latest, Python 3.11</text>
+  <text x="46" y="370" class="t-s">hourly feature workflow</text>
+  <text x="46" y="390" class="t-s">daily training workflow</text>
+  <text x="46" y="410" class="t-s">manual backfill workflow</text>
+  <text x="46" y="432" class="t-s">secrets injected as environment variables</text>
+
+  <!-- railway -->
+  <rect x="352" y="70" width="330" height="230" rx="12" fill="#EEF4FA" stroke="#2C6FB5" stroke-width="2"/>
+  <rect x="352" y="70" width="330" height="32" rx="12" fill="#2C6FB5"/>
+  <rect x="352" y="86" width="330" height="16" fill="#2C6FB5"/>
+  <text x="517" y="92" text-anchor="middle" class="t-h" style="fill:#fff">Railway &#183; container host</text>
+  <rect x="374" y="118" width="286" height="162" rx="9" fill="#fff" stroke="#B9C6D6"/>
+  <text x="517" y="142" text-anchor="middle" class="t-b">Docker image, python:3.11-slim</text>
+  <text x="390" y="166" class="t-s">requirements-deploy.txt: FastAPI, Uvicorn,</text>
+  <text x="390" y="184" class="t-s">pandas, XGBoost, SHAP - no feature-store</text>
+  <text x="390" y="202" class="t-s">or deep-learning dependency</text>
+  <text x="390" y="226" class="t-s">libgomp1 installed for the XGBoost runtime</text>
+  <text x="390" y="248" class="t-s">editable install so the project root resolves</text>
+  <text x="390" y="266" class="t-s">to /app, where the artefacts live</text>
+
+  <!-- vercel -->
+  <rect x="742" y="70" width="348" height="230" rx="12" fill="#EEF4FA" stroke="#2C6FB5" stroke-width="2"/>
+  <rect x="742" y="70" width="348" height="32" rx="12" fill="#2C6FB5"/>
+  <rect x="742" y="86" width="348" height="16" fill="#2C6FB5"/>
+  <text x="916" y="92" text-anchor="middle" class="t-h" style="fill:#fff">Vercel &#183; static edge host</text>
+  <rect x="764" y="118" width="304" height="162" rx="9" fill="#fff" stroke="#B9C6D6"/>
+  <text x="916" y="142" text-anchor="middle" class="t-b">Vite production build</text>
+  <text x="780" y="166" class="t-s">hashed JavaScript and CSS bundles served</text>
+  <text x="780" y="184" class="t-s">from the edge, no server process</text>
+  <text x="780" y="208" class="t-s">the backend address is baked into the build</text>
+  <text x="780" y="226" class="t-s">command, because the platform refuses</text>
+  <text x="780" y="244" class="t-s">build-time variables with a VITE_ prefix</text>
+  <text x="780" y="268" class="t-s">a rewrite rule sends every path to the app</text>
+
+  <!-- browser -->
+  <rect x="742" y="360" width="348" height="96" rx="12" fill="#1F3A5F"/>
+  <text x="916" y="392" text-anchor="middle" class="t-h" style="fill:#fff">User&#8217;s browser</text>
+  <text x="916" y="416" text-anchor="middle" class="t-s" style="fill:#cdd9e8">loads the bundle from Vercel, then calls the</text>
+  <text x="916" y="436" text-anchor="middle" class="t-s" style="fill:#cdd9e8">Railway API over HTTPS for live data</text>
+
+  <!-- hopsworks -->
+  <rect x="352" y="336" width="330" height="106" rx="12" fill="#E6F2EC" stroke="#2E7D52" stroke-width="2"/>
+  <text x="517" y="364" text-anchor="middle" class="t-h">Hopsworks Serverless</text>
+  <text x="517" y="390" text-anchor="middle" class="t-s">feature store and model registry</text>
+  <text x="517" y="412" text-anchor="middle" class="t-s">reached only by the Actions runners -</text>
+  <text x="517" y="430" text-anchor="middle" class="t-s">never on the request path of a page view</text>
+
+  <!-- edges -->
+  <path d="M280,168 L346,168" stroke="#2C6FB5" stroke-width="2.4" marker-end="url(#a)"/>
+  <text x="313" y="158" text-anchor="middle" class="t-s">deploy</text>
+  <path d="M280,140 C500,20 720,20 900,64" stroke="#2C6FB5" stroke-width="2.4" fill="none" marker-end="url(#a)"/>
+  <text x="590" y="34" text-anchor="middle" class="t-s">deploy</text>
+  <path d="M155,286 L155,266" stroke="#C8881A" stroke-width="2.4" marker-end="url(#o)"/>
+  <text x="166" y="282" class="t-s">commit refreshed artefacts</text>
+  <path d="M280,368 L346,378" stroke="#2E7D52" stroke-width="2.4" marker-end="url(#g)"/>
+  <path d="M916,304 L916,354" stroke="#2C6FB5" stroke-width="2.4" marker-end="url(#a)"/>
+  <path d="M742,404 L688,300" stroke="#2C6FB5" stroke-width="2.4" fill="none" marker-end="url(#a)"/>
+  <text x="700" y="336" text-anchor="end" class="t-s">HTTPS to /api/*</text>
+
+  <!-- modes -->
+  <rect x="30" y="492" width="530" height="184" rx="12" fill="#F7FAFD" stroke="#2C6FB5" stroke-width="1.8"/>
+  <text x="295" y="520" text-anchor="middle" class="t-h">Mode A - dynamic (currently deployed)</text>
+  <text x="50" y="548" class="t-s">The frontend is built with a backend address, so it fetches</text>
+  <text x="50" y="568" class="t-s">everything live from the FastAPI service.</text>
+  <text x="50" y="596" class="t-b">Available:</text>
+  <text x="50" y="616" class="t-s">forecasts, map, leaderboard, evaluation, monitoring,</text>
+  <text x="50" y="634" class="t-s">on-demand explanation, the what-if simulator, and the</text>
+  <text x="50" y="652" class="t-s">advisor chat when an API key is configured on the host.</text>
+
+  <rect x="590" y="492" width="500" height="184" rx="12" fill="#F7FAFD" stroke="#B9C6D6" stroke-width="1.8" stroke-dasharray="5 4"/>
+  <text x="840" y="520" text-anchor="middle" class="t-h">Mode B - static fallback</text>
+  <text x="610" y="548" class="t-s">With no backend address configured, the same code reads</text>
+  <text x="610" y="568" class="t-s">the committed JSON snapshots shipped beside the bundle.</text>
+  <text x="610" y="596" class="t-b">Available:</text>
+  <text x="610" y="616" class="t-s">forecasts, map, leaderboard, evaluation and monitoring.</text>
+  <text x="610" y="634" class="t-s">The what-if and chat tabs, which need a live model, are</text>
+  <text x="610" y="652" class="t-s">hidden rather than shown broken.</text>
+</svg>
+</div></body></html>

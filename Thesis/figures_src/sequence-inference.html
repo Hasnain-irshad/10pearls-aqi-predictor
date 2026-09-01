@@ -1,0 +1,77 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="_style.css"></head>
+<body><div id="canvas">
+<svg width="1140" height="780" viewBox="0 0 1140 780">
+  <defs>
+    <marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#2C6FB5"/></marker>
+    <marker id="ad" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#5C6B7A"/></marker>
+  </defs>
+  <text x="570" y="30" text-anchor="middle" class="t-title">Sequence of a Forecast Refresh and a Dashboard Request</text>
+
+  <!-- lifelines -->
+  <g class="t-b">
+    <rect x="26" y="52" width="132" height="42" rx="8" fill="#FBEEDF" stroke="#C8881A"/><text x="92" y="78" text-anchor="middle" class="t-b">Scheduler</text>
+    <rect x="188" y="52" width="152" height="42" rx="8" fill="#EEF4FA" stroke="#2C6FB5"/><text x="264" y="78" text-anchor="middle" class="t-b">Inference job</text>
+    <rect x="370" y="52" width="152" height="42" rx="8" fill="#E6F2EC" stroke="#2E7D52"/><text x="446" y="78" text-anchor="middle" class="t-b">Model registry</text>
+    <rect x="552" y="52" width="152" height="42" rx="8" fill="#FBEEDF" stroke="#C8881A"/><text x="628" y="78" text-anchor="middle" class="t-b">Open-Meteo</text>
+    <rect x="734" y="52" width="152" height="42" rx="8" fill="#EEF4FA" stroke="#2C6FB5"/><text x="810" y="78" text-anchor="middle" class="t-b">FastAPI backend</text>
+    <rect x="916" y="52" width="152" height="42" rx="8" fill="#1F3A5F"/><text x="992" y="78" text-anchor="middle" class="t-b" style="fill:#fff">Dashboard</text>
+  </g>
+  <line x1="92" y1="94" x2="92" y2="718" stroke="#B9C6D6" stroke-dasharray="5 5"/>
+  <line x1="264" y1="94" x2="264" y2="718" stroke="#B9C6D6" stroke-dasharray="5 5"/>
+  <line x1="446" y1="94" x2="446" y2="718" stroke="#B9C6D6" stroke-dasharray="5 5"/>
+  <line x1="628" y1="94" x2="628" y2="718" stroke="#B9C6D6" stroke-dasharray="5 5"/>
+  <line x1="810" y1="94" x2="810" y2="718" stroke="#B9C6D6" stroke-dasharray="5 5"/>
+  <line x1="992" y1="94" x2="992" y2="718" stroke="#B9C6D6" stroke-dasharray="5 5"/>
+
+  <!-- activation bars -->
+  <rect x="257" y="120" width="14" height="480" fill="#EEF4FA" stroke="#2C6FB5"/>
+  <rect x="803" y="628" width="14" height="76" fill="#EEF4FA" stroke="#2C6FB5"/>
+
+  <!-- messages -->
+  <path d="M92,124 L250,124" stroke="#2C6FB5" stroke-width="1.8" marker-end="url(#a)"/>
+  <text x="100" y="116" class="t-s">1. trigger after the daily training job</text>
+
+  <path d="M271,160 L440,160" stroke="#2C6FB5" stroke-width="1.8" marker-end="url(#a)"/>
+  <text x="280" y="152" class="t-s">2. get the version with the lowest RMSE</text>
+  <path d="M440,192 L275,192" stroke="#5C6B7A" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#ad)"/>
+  <text x="284" y="184" class="t-s">3. champion bundle: estimator, column order, interval table</text>
+
+  <rect x="200" y="212" width="700" height="30" rx="6" fill="#F7FAFD" stroke="#B9C6D6"/>
+  <text x="214" y="232" class="t-s">loop &#160;[for each of the 22 cities]</text>
+
+  <path d="M271,268 L622,268" stroke="#2C6FB5" stroke-width="1.8" marker-end="url(#a)"/>
+  <text x="280" y="260" class="t-s">4. past 3 days of observations and the next 4 days of forecast weather</text>
+  <path d="M622,300 L275,300" stroke="#5C6B7A" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#ad)"/>
+  <text x="284" y="292" class="t-s">5. hourly pollutant and weather series</text>
+
+  <path d="M271,332 C330,332 330,362 271,362" stroke="#2C6FB5" stroke-width="1.8" fill="none" marker-end="url(#a)"/>
+  <text x="340" y="342" class="t-s">6. engineer features, take the anchor state at the current hour</text>
+  <text x="340" y="360" class="t-s">and assemble one input row per future hour, with h as a column</text>
+
+  <path d="M271,394 C330,394 330,424 271,424" stroke="#2C6FB5" stroke-width="1.8" fill="none" marker-end="url(#a)"/>
+  <text x="340" y="404" class="t-s">7. predict 72 values, widen each by the residual quantiles for its horizon,</text>
+  <text x="340" y="422" class="t-s">label each with its AQI category, aggregate to a three-day view</text>
+
+  <path d="M271,456 C330,456 330,486 271,486" stroke="#2C6FB5" stroke-width="1.8" fill="none" marker-end="url(#a)"/>
+  <text x="340" y="466" class="t-s">8. explain the peak hour with SHAP and phrase it in plain language;</text>
+  <text x="340" y="484" class="t-s">raise an alert if the peak crosses the unhealthy threshold</text>
+
+  <rect x="200" y="504" width="700" height="26" rx="6" fill="#fff" stroke="#B9C6D6" stroke-dasharray="4 3"/>
+  <text x="214" y="522" class="t-s">end loop</text>
+
+  <path d="M271,556 C330,556 330,586 271,586" stroke="#2C6FB5" stroke-width="1.8" fill="none" marker-end="url(#a)"/>
+  <text x="340" y="566" class="t-s">9. write predictions.json, append every forecast point to the forecast log,</text>
+  <text x="340" y="584" class="t-s">and commit the refreshed artefacts back to the repository</text>
+
+  <line x1="26" y1="612" x2="1114" y2="612" stroke="#B9C6D6" stroke-dasharray="2 4"/>
+  <text x="26" y="630" class="t-s">Later, independently of the job above:</text>
+
+  <path d="M986,652 L820,652" stroke="#2C6FB5" stroke-width="1.8" marker-end="url(#a)"/>
+  <text x="700" y="644" text-anchor="end" class="t-s">10. GET /api/predictions</text>
+  <path d="M803,692 L986,692" stroke="#5C6B7A" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#ad)"/>
+  <text x="700" y="684" text-anchor="end" class="t-s">11. the committed forecast payload, served from disk</text>
+
+  <rect x="26" y="726" width="1088" height="40" rx="9" fill="#E6F2EC" stroke="#2E7D52"/>
+  <text x="570" y="751" text-anchor="middle" class="t-s">Steps 1 to 9 are a scheduled batch job; steps 10 and 11 are a read of a static file. No user request ever waits for a model to run, which is what keeps the served page fast.</text>
+</svg>
+</div></body></html>

@@ -1,0 +1,54 @@
+%==============================================================================
+%  PEARLS AQI PREDICTOR --- Project Thesis
+%  Master document.  Compile with pdfLaTeX (run 2-3 times for TOC/refs), or
+%  simply:  latexmk -pdf main.tex
+%
+%  Formatting is configured in preamble/format.tex:
+%     Body .................. Times New Roman, 12pt, 1.5 line spacing
+%     Chapter title ......... Times New Roman, 20pt, Bold, Title Case
+%     Section  (x.y) ........ Times New Roman, 14pt, Bold, Title Case
+%     Subsection (x.y.z) .... Times New Roman, 14pt, Regular
+%     Figure caption ........ centered, below the figure   "Figure 1.1: ..."
+%     Table caption ......... left-aligned, above the table "Table 1.1: ..."
+%==============================================================================
+\documentclass[12pt,a4paper,oneside]{report}
+
+\input{preamble/format}      % all fonts, spacing, heading & caption styling
+\input{preamble/commands}    % helper macros (figures, author, project name)
+
+\begin{document}
+
+%------------------------------------------------------------------ FRONT MATTER
+\pagenumbering{roman}
+\setcounter{page}{1}
+
+\input{frontmatter/titlepage}        % project title page
+\input{frontmatter/abstract}
+
+\cleardoublepage
+\tableofcontents
+\cleardoublepage
+\listoffigures
+\cleardoublepage
+\listoftables
+
+%------------------------------------------------------------------- MAIN MATTER
+\cleardoublepage
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+\input{chapters/ch1_introduction}
+\input{chapters/ch2_literature}
+\input{chapters/ch3_problem}
+\input{chapters/ch4_requirements}
+\input{chapters/ch5_design}
+\input{chapters/ch6_implementation}
+\input{chapters/ch7_ui}
+\input{chapters/ch8_testing}
+\input{chapters/ch9_conclusion}
+\input{chapters/ch10_glossary}
+
+%-------------------------------------------------------------------- REFERENCES
+\input{backmatter/references}
+
+\end{document}

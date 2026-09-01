@@ -1,0 +1,181 @@
+%==============================================================================
+%  format.tex --- global formatting to match the thesis requirements.
+%==============================================================================
+
+% ---- Page geometry (extra left margin for binding) ----
+\usepackage[a4paper,left=1.5in,right=1in,top=1in,bottom=1in]{geometry}
+
+% ---- Times New Roman family ----
+% pdfLaTeX route: mathptmx renders a Times-equivalent for text AND math and
+% needs no font files, so it compiles anywhere (incl. Overleaf's default
+% engine). For the EXACT "Times New Roman" outline, see README -> XeLaTeX note.
+\usepackage{mathptmx}                 % Times for text + math
+\usepackage[scaled=0.92]{helvet}      % Helvetica-like for any sans bits
+\usepackage{courier}                  % monospaced for code
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+
+% ---- 1.5 line spacing ----
+\usepackage{setspace}
+\onehalfspacing
+
+% ---- Colours ----
+\usepackage{xcolor}
+\definecolor{navy}{HTML}{1F3A5F}
+\definecolor{accent}{HTML}{2C6FB5}
+\definecolor{rulegrey}{HTML}{888888}
+\definecolor{codebg}{HTML}{F5F7FA}
+\definecolor{codeframe}{HTML}{D8DEE6}
+
+% ---- Mathematics ----
+\usepackage{amsmath}
+
+% ---- Graphics, tables, misc ----
+\usepackage{graphicx}
+\graphicspath{{figures/}}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{ragged2e}
+\usepackage{enumitem}
+\setlist{nosep,leftmargin=2.2em}
+\usepackage{float}
+\usepackage{etoolbox}
+\usepackage{xltabular}   % long tables with X columns: they break across pages
+                         % instead of leaving a page half empty.
+
+% ---- Float placement: never leave a page half empty ----------------------
+% Floats are allowed to settle on the page (or the top of the next one), and the
+% fractions below let a float share a page with a generous amount of text.
+\renewcommand{\topfraction}{0.92}
+\renewcommand{\bottomfraction}{0.75}
+\renewcommand{\textfraction}{0.06}
+\renewcommand{\floatpagefraction}{0.80}
+\setcounter{topnumber}{3}
+\setcounter{bottomnumber}{2}
+\setcounter{totalnumber}{5}
+
+% Tables are set single-spaced and one step smaller than the body.  The 1.5 line
+% spacing required for the running text is not appropriate inside a table, where
+% it merely spreads short cells over a great deal of paper.
+\AtBeginEnvironment{tabularx}{\small\setstretch{1.0}}
+\AtBeginEnvironment{xltabular}{\small\setstretch{1.0}}
+\AtBeginEnvironment{longtable}{\small\setstretch{1.0}}
+% xltabular hands its body to longtable, whose row material is re-read after the
+% environment has begun, so the size is also forced on every column below.
+\newcolumntype{S}{>{\small\setstretch{1.0}}l}
+\newcolumntype{B}{>{\small\setstretch{1.0}\bfseries}l}
+\newcolumntype{Y}{>{\small\setstretch{1.0}}X}
+\newcolumntype{C}{>{\small\setstretch{1.0}}c}
+\newcolumntype{P}[1]{>{\small\setstretch{1.0}\raggedright\arraybackslash}p{#1}}
+\newcolumntype{Q}[1]{>{\small\setstretch{1.0}\raggedright\arraybackslash\bfseries}p{#1}}
+\renewcommand{\arraystretch}{1.12}
+
+% ---- Headings (titlesec) ----
+\usepackage{titlesec}
+
+% Chapter:  "Chapter N" then the title, both 20pt Bold, centered, Title Case.
+\titleformat{\chapter}[display]
+  {\normalfont\fontsize{20}{24}\bfseries\centering}
+  {Chapter \thechapter}{8pt}{}
+\titlespacing*{\chapter}{0pt}{10pt}{28pt}
+
+% Section (x.y): 14pt Bold, Title Case, 12pt space above.
+\titleformat{\section}
+  {\normalfont\fontsize{14}{17}\bfseries}
+  {\thesection}{0.6em}{}
+\titlespacing*{\section}{0pt}{12pt}{4pt}
+
+% Subsection (x.y.z): 14pt Regular, Title Case, 12pt space above.
+\titleformat{\subsection}
+  {\normalfont\fontsize{14}{17}\mdseries}
+  {\thesubsection}{0.6em}{}
+\titlespacing*{\subsection}{0pt}{12pt}{4pt}
+
+% Sub-subsection: 12pt Bold (kept compact; rarely used).
+\titleformat{\subsubsection}
+  {\normalfont\fontsize{12}{15}\bfseries}
+  {\thesubsubsection}{0.6em}{}
+\titlespacing*{\subsubsection}{0pt}{8pt}{2pt}
+
+% Number depth: number x.y.z.w, list x.y.z in TOC.
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{2}
+
+% ---- Captions: figures centered & below; tables left & above ----
+\usepackage{caption}
+\captionsetup{font={small},labelfont=bf,labelsep=colon}
+\captionsetup[figure]{justification=centering,singlelinecheck=true,position=bottom,name=Figure}
+\captionsetup[table]{justification=raggedright,singlelinecheck=false,position=top,name=Table}
+
+% ---- Code listings ----
+\usepackage{listings}
+\lstdefinestyle{thesis}{
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\color{navy}\bfseries,
+  commentstyle=\color{rulegrey},
+  stringstyle=\color{accent},
+  frame=single,
+  rulecolor=\color{codeframe},
+  breaklines=true,
+  showstringspaces=false,
+  numbers=left,
+  numberstyle=\tiny\color{rulegrey},
+  numbersep=8pt,
+  xleftmargin=1.6em,
+  framexleftmargin=1.4em,
+  tabsize=2,
+  captionpos=b,
+}
+\lstset{style=thesis}
+
+% ---- Running headers / footers ----
+% The page number appears on EVERY page, in the SAME place - bottom centre.  No
+% running header is used, so ordinary pages and chapter-opening pages match.
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+\fancyfoot[C]{\small\thepage}
+% \chapter, \tableofcontents etc. switch to "plain"; make it identical.
+\fancypagestyle{plain}{%
+  \fancyhf{}%
+  \renewcommand{\headrulewidth}{0pt}%
+  \renewcommand{\footrulewidth}{0pt}%
+  \fancyfoot[C]{\small\thepage}%
+}
+
+% ---- Hyperlinks (subtle, print-friendly) ----
+\usepackage[hidelinks,breaklinks=true]{hyperref}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  citecolor=navy,
+  urlcolor=accent,
+  bookmarksnumbered=true,
+}
+\usepackage{url}
+
+% ---- Paragraph layout: justified, small indent ----
+\setlength{\parindent}{0.3in}
+\setlength{\parskip}{4pt plus 1pt minus 1pt}
+\justifying
+
+% Paragraph spacing is kept even.  (\flushbottom would force every page to the
+% same depth by stretching the gaps between paragraphs and headings, trading a
+% small amount of space at the foot of a page for conspicuous gaps mid-page.)
+\raggedbottom
+
+% Discourage widow and orphan lines.
+\widowpenalty=10000
+\clubpenalty=10000
+
+% ---- Prevent text from running past the right margin (overfull lines) ----
+\setlength{\emergencystretch}{3em}
+\tolerance=2000
+\hbadness=10000
+\usepackage{microtype}

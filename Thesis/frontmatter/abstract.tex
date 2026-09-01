@@ -1,0 +1,44 @@
+%------------ ABSTRACT   (must fit on a single page)
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+\thispagestyle{plain}
+
+Pakistan contains some of the most polluted urban air on earth, yet the
+air-quality information available to its residents is almost entirely a
+\emph{nowcast}: a single number describing the air as it is at this moment, for
+one monitoring site, with no explanation of why and no indication of what it will
+be tomorrow. The decisions that actually protect health - whether to keep a
+child indoors, whether to reschedule outdoor work, whether an asthmatic should
+carry a mask - require lead time, and therefore require a forecast. A forecast,
+in turn, is not a model trained once: air quality is strongly seasonal, so a
+static model decays silently. What is needed is not a model but a system that
+keeps itself current.
+
+This thesis presents the \projname, an end-to-end, effectively serverless
+machine-learning system that forecasts the Air Quality Index up to 72 hours ahead
+for 22 cities spanning every province of Pakistan as well as the Islamabad
+Capital Territory, Gilgit-Baltistan and Azad Jammu \& Kashmir. It is built as
+three decoupled Feature-Training-Inference pipelines that communicate only
+through a managed feature store and model registry. An hourly feature pipeline
+ingests weather and pollutant observations and engineers a leakage-controlled
+feature table; a daily training pipeline rebuilds a multi-horizon supervised
+dataset, compares four model families, and admits a new model only through a
+champion-challenger promotion gate; and a batch inference pipeline loads the
+reigning champion and writes the 72-hour forecast curve, with calibrated
+prediction intervals, for every city. All computation runs on free scheduled
+infrastructure, so the running cost is negligible.
+
+The contribution is the operational layer around the model. Accuracy is reported
+per forecast horizon and under a rolling walk-forward backtest rather than as one
+averaged number. The champion gradient-boosted model attains a validation RMSE of
+19.69, MAE of 12.80 and $R^2$ of 0.85, beating a persistence baseline by 22\%
+overall and at every horizon from two hours to three days, with a mean backtest
+RMSE of 20.55. Every forecast carries a plain-language explanation derived from
+SHAP attributions; a what-if simulator lets a user perturb the drivers and watch
+the model respond; and the system monitors itself for feature drift and scores
+its own past forecasts against the air quality that actually arrived. The results
+are delivered through a FastAPI service and a React dashboard deployed to the
+public internet, together with a Model Context Protocol server exposing the same
+grounded tools to a language-model advisor.
+
+\clearpage

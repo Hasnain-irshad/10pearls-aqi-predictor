@@ -1,0 +1,35 @@
+%==============================================================================
+%  commands.tex --- helper macros used throughout the thesis.
+%==============================================================================
+
+% Insert a figure that obeys the format rules (centered, width <= text width,
+% caption centered below).  Usage:
+%   \fig{filename}{width-fraction}{Caption text.}{fig:label}
+\newcommand{\fig}[4]{%
+  \begin{figure}[htbp]
+    \centering
+    \includegraphics[width=#2\textwidth]{#1}
+    \caption{#3}
+    \label{#4}
+  \end{figure}%
+}
+
+% Code excerpts.  The template recognises only two kinds of numbered element -
+% Figures and Tables - so a code excerpt is placed inside a *figure* float and
+% captioned "Figure x.y: ..." (centered, below), exactly like any other figure,
+% rather than with a separate "Listing" counter.  The macro below only trims the
+% space the listing frame adds inside a float.
+\newcommand{\codegap}{\vspace{-0.6em}}
+
+% Author.  Edit this one line to change the name on the title page.
+\newcommand{\Author}{Hasnain Irshad}
+
+% Project name shortcuts.
+\newcommand{\projname}{Pearls AQI Predictor}
+\newcommand{\modelname}{aqi\_global\_forecaster}
+
+% Inline code (kept plain Times New Roman per the single-font requirement).
+\newcommand{\code}[1]{#1}
+
+% A small vertical gap on the title page.
+\newcommand{\titlegap}{\vspace{1.2em}}

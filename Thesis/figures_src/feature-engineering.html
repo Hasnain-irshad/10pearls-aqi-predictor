@@ -1,0 +1,86 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="_style.css"></head>
+<body><div id="canvas">
+<svg width="1120" height="660" viewBox="0 0 1120 660">
+  <defs>
+    <marker id="a" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#2C6FB5"/></marker>
+  </defs>
+
+  <text x="560" y="32" text-anchor="middle" class="t-title">From Raw Observations to a Leakage-Controlled Feature Table</text>
+
+  <!-- stage 1 -->
+  <rect x="24" y="64" width="250" height="288" rx="12" fill="#FBEEDF" stroke="#C8881A" stroke-width="2"/>
+  <text x="149" y="92" text-anchor="middle" class="t-h" fill="#8a5e12">Raw hourly row</text>
+  <text x="149" y="112" text-anchor="middle" class="t-s">21 columns, one city, one hour</text>
+  <line x1="44" y1="124" x2="254" y2="124" stroke="#C8881A" stroke-dasharray="3 3"/>
+  <text x="44" y="148" class="t-b">Pollutants</text>
+  <text x="44" y="168" class="t-s">pm2_5, pm10, carbon monoxide,</text>
+  <text x="44" y="185" class="t-s">nitrogen dioxide, sulphur dioxide,</text>
+  <text x="44" y="202" class="t-s">ozone, us_aqi</text>
+  <text x="44" y="228" class="t-b">Weather</text>
+  <text x="44" y="248" class="t-s">temperature, humidity, dew point,</text>
+  <text x="44" y="265" class="t-s">apparent temperature, precipitation,</text>
+  <text x="44" y="282" class="t-s">pressure, cloud cover, wind speed,</text>
+  <text x="44" y="299" class="t-s">wind direction, wind gusts</text>
+  <text x="44" y="325" class="t-b">Identity</text>
+  <text x="44" y="343" class="t-s">city, latitude, longitude, datetime</text>
+
+  <!-- stage 2 -->
+  <rect x="318" y="64" width="352" height="392" rx="12" fill="#EEF4FA" stroke="#2C6FB5" stroke-width="2"/>
+  <text x="494" y="92" text-anchor="middle" class="t-h">Engineered feature table</text>
+  <text x="494" y="112" text-anchor="middle" class="t-s">74 columns, built per city</text>
+
+  <rect x="338" y="126" width="312" height="60" rx="8" fill="#fff" stroke="#B9C6D6"/>
+  <text x="352" y="148" class="t-b">Target</text>
+  <text x="352" y="168" class="t-s">aqi = Open-Meteo us_aqi, EPA formula as fallback</text>
+
+  <rect x="338" y="196" width="312" height="72" rx="8" fill="#fff" stroke="#B9C6D6"/>
+  <text x="352" y="218" class="t-b">Calendar, encoded cyclically</text>
+  <text x="352" y="238" class="t-s">hour, month and weekday mapped to sine</text>
+  <text x="352" y="256" class="t-s">and cosine pairs, so hour 23 neighbours hour 0</text>
+
+  <rect x="338" y="278" width="312" height="60" rx="8" fill="#fff" stroke="#B9C6D6"/>
+  <text x="352" y="300" class="t-b">Wind as a vector</text>
+  <text x="352" y="320" class="t-s">speed and bearing decomposed into u and v</text>
+
+  <rect x="338" y="348" width="312" height="94" rx="8" fill="#F4E9EC" stroke="#B5485B"/>
+  <text x="352" y="370" class="t-b" fill="#8d3444">History, shifted so it cannot see the present</text>
+  <text x="352" y="390" class="t-s">lags at 1, 3, 6, 12 and 24 hours</text>
+  <text x="352" y="408" class="t-s">rolling mean, standard deviation and maximum</text>
+  <text x="352" y="426" class="t-s">over 6 and 24 hours, each shifted by one hour</text>
+
+  <!-- stage 3 -->
+  <rect x="714" y="64" width="382" height="392" rx="12" fill="#E6F2EC" stroke="#2E7D52" stroke-width="2"/>
+  <text x="905" y="92" text-anchor="middle" class="t-h">Multi-horizon supervised set</text>
+  <text x="905" y="112" text-anchor="middle" class="t-s">27 model inputs, one target</text>
+
+  <rect x="734" y="126" width="342" height="92" rx="8" fill="#fff" stroke="#B9C6D6"/>
+  <text x="748" y="148" class="t-b">20 target-time features, known in advance</text>
+  <text x="748" y="168" class="t-s">forecast weather at the target hour,</text>
+  <text x="748" y="186" class="t-s">deterministic calendar at the target hour,</text>
+  <text x="748" y="204" class="t-s">fixed latitude and longitude</text>
+
+  <rect x="734" y="228" width="342" height="92" rx="8" fill="#fff" stroke="#B9C6D6"/>
+  <text x="748" y="250" class="t-b">6 anchor-state features, observed now</text>
+  <text x="748" y="270" class="t-s">current AQI, 6-hour and 24-hour AQI means,</text>
+  <text x="748" y="288" class="t-s">recent AQI volatility, current PM2.5 and PM10,</text>
+  <text x="748" y="306" class="t-s">each taken from h hours before the target</text>
+
+  <rect x="734" y="330" width="342" height="56" rx="8" fill="#FBEEDF" stroke="#C8881A"/>
+  <text x="748" y="352" class="t-b" fill="#8a5e12">1 horizon feature</text>
+  <text x="748" y="372" class="t-s">h &#8712; {1, 2, 3, 6, 12, 24, 36, 48, 60, 72} hours</text>
+
+  <rect x="734" y="396" width="342" height="46" rx="8" fill="#1F3A5F"/>
+  <text x="905" y="425" text-anchor="middle" class="t-b" style="fill:#fff">Target: the AQI actually observed at t + h</text>
+
+  <!-- arrows -->
+  <path d="M276,210 L312,210" stroke="#2C6FB5" stroke-width="2.6" fill="none" marker-end="url(#a)"/>
+  <path d="M672,250 L708,250" stroke="#2C6FB5" stroke-width="2.6" fill="none" marker-end="url(#a)"/>
+
+  <!-- leakage note -->
+  <rect x="24" y="500" width="1072" height="122" rx="12" fill="#F4E9EC" stroke="#B5485B" stroke-width="1.6"/>
+  <text x="44" y="528" class="t-h" fill="#8d3444">The leakage rule that governs every line above</text>
+  <text x="44" y="554" class="t-s">A feature attached to time t may only contain information that existed at time t. Every rolling window is therefore shifted by one hour so that it ends at the</text>
+  <text x="44" y="574" class="t-s">previous observation and never includes the current one, and every lag and rolling statistic is computed inside a single city, so that one city&#8217;s history can never</text>
+  <text x="44" y="594" class="t-s">leak into another&#8217;s. The train and validation sets are then divided chronologically, never at random, so the model is always scored on a future it has not seen.</text>
+</svg>
+</div></body></html>

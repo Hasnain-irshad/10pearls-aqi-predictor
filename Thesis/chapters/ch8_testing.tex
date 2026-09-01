@@ -1,0 +1,729 @@
+\chapter{Testing and Evaluation}
+\label{ch:testing}
+
+\section{Introduction}
+This chapter reports how the system was verified and how well it performs. It
+covers three kinds of evidence. \emph{Software testing} establishes that the code
+does what it was written to do, with particular attention to the properties that
+would otherwise fail silently. \emph{Model evaluation} establishes how accurate
+the forecasts are, reported per horizon and under rolling validation rather than
+as a single number. \emph{System validation} establishes that the deployed
+service actually works, by exercising every published endpoint against the live
+deployment. The chapter closes with the operational evidence from the running
+system, an assessment of the threats to the validity of these results, and a
+discussion of what the results mean.
+
+\section{Testing Objectives}
+Five objectives were set.
+
+\begin{enumerate}
+  \item To verify that the index computation is correct at its breakpoints, its
+  category boundaries and its edge cases, since every number the system produces
+  is expressed in that unit.
+  \item To verify that no target leakage exists in the feature representation,
+  because leakage produces a model that scores well and fails in production, and
+  the failure is invisible in the metrics that would normally be trusted.
+  \item To establish that the model has genuine forecasting skill by comparing it
+  against a persistence baseline at every horizon, not merely on average.
+  \item To estimate forward performance honestly, using rolling validation rather
+  than a single fortunate split.
+  \item To confirm that the deployed system serves every documented capability,
+  and that capabilities which are unavailable fail in the specified, informative
+  way rather than obscurely.
+\end{enumerate}
+
+\section{Testing Strategy}
+Testing was applied at four levels, summarised in Table~\ref{tab:strategy}. The
+distribution of effort is deliberate: the heaviest unit testing is concentrated
+on the two components whose failures would be silent, and the heaviest
+system-level effort is concentrated on the deployed endpoints, because a
+capability that works locally and not in production has not been delivered.
+
+\begin{xltabular}{\textwidth}{P{2.6cm} P{3.1cm} Y}
+\caption{Testing strategy by level.}\label{tab:strategy}\\
+\toprule
+\bfseries Level & \bfseries Method & \bfseries What it establishes \\
+\midrule
+\endfirsthead
+\toprule
+\bfseries Level & \bfseries Method & \bfseries What it establishes \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+Unit & pytest~\cite{ref:pytest} over synthetic, deterministic inputs & That the
+index computation and the feature and supervised builders are correct, including
+the leakage properties. \\
+Integration & Scheduled pipeline runs against live data and the real feature
+store & That ingestion, storage, training, promotion, inference and monitoring
+compose correctly under real conditions. \\
+System & Direct exercise of every published endpoint on the live deployment & That
+the delivered service works from outside, and that unavailable capabilities fail
+informatively. \\
+Model & Held-out chronological validation, per-horizon metrics, walk-forward
+backtesting, baseline comparison & That the forecasts have skill, and how that
+skill decays with lead time. \\
+\end{xltabular}
+
+\section{Unit Testing}
+The unit suite comprises twelve tests. All twelve pass; the run reported
+\texttt{12 passed} in 22.01 seconds. The tests are built on synthetic series with
+known structure rather than on live data, so they are deterministic and do not
+depend on a network.
+
+\subsection{Index Computation Tests}
+Seven tests cover the index module.
+
+The first checks the piecewise-linear interpolation at a breakpoint endpoint: a
+particulate concentration of 9.0 micrograms per cubic metre sits exactly at the
+top of the \emph{good} band and must therefore produce an index of exactly 50.
+Testing at an endpoint rather than in the middle of a band is deliberate, since
+an off-by-one in the breakpoint tables would be invisible mid-band.
+
+The second checks monotonicity across bands, requiring that a rising sequence of
+concentrations produce a non-decreasing sequence of index values, which would
+catch a transposed or mis-ordered breakpoint pair.
+
+The third is the most important test in the module, and encodes the design
+decision of Section~\ref{sec:impl-aqi}. It supplies a very large carbon monoxide
+value alongside clean particulate readings and requires the computed index to be
+unaffected - that is, it asserts that gaseous pollutants are excluded from the
+computation. Without this test, a later change that added gases back without the
+necessary unit conversion would silently corrupt every affected row, because the
+index is a maximum over sub-indices and one inflated sub-index dominates.
+
+The remaining four confirm that the category boundaries are assigned correctly at
+50, 51 and 301; that the six categories are contiguous, each band beginning
+exactly one above the previous band's end, so that no value can fall between
+categories; that the hazard predicate fires above the threshold and not below it;
+and that a missing concentration yields a missing sub-index rather than an
+exception, so that a gap in the provider's data cannot fail a batch.
+
+\subsection{Feature and Supervised-Set Tests}
+Five tests cover the feature layer, and two of them are the leakage guards.
+
+The first confirms that the engineered table contains the expected feature
+families - a cyclical hour encoding, the target, a change rate, a 24-hour lag, a
+24-hour rolling mean, both wind components and the primary key.
+
+The second confirms that the derived primary key is both strictly increasing and
+unique within a city, which is the precondition for the upsert semantics on which
+every re-run of every pipeline depends.
+
+The third is the cross-city leakage guard. Two synthetic cities are concatenated
+and passed through the multi-city builder, and the test requires that
+\emph{each} city independently show exactly 24 missing values in its 24-hour lag
+column. This can only hold if the two cities were engineered as separate groups;
+had the lag been computed over the concatenated frame, the second city would show
+none, because it would have silently borrowed the first city's history.
+
+The fourth confirms that the supervised builder emits every declared model
+feature and the target, and that the horizon column takes exactly the requested
+values - verifying that the horizon really is a feature rather than an implicit
+property of the dataset.
+
+The fifth is the temporal leakage guard, asserting that the anchor value attached
+to a row at horizon $h$ is the value observed $h$ steps earlier, and that no
+anchor is missing after the incomplete rows have been dropped.
+
+\subsection{Coverage Assessment}
+The suite covers the two components whose failure modes are silent. It does not
+cover the promotion gate, the interval construction, the drift computation or the
+API handlers, which were verified by integration and system testing rather than
+by unit tests. Section~\ref{sec:testing-threats} treats this as a limitation, and
+Chapter~\ref{ch:conclusion} lists it as future work.
+
+\section{Integration and System Testing}
+Integration testing was performed by running the pipelines end to end on the
+scheduled runners against the real feature store and the real provider. Four
+integration properties were confirmed in this way, and each of them had failed at
+least once before it held.
+
+\emph{Idempotent ingestion.} The hourly pipeline was run repeatedly within the
+same hour, with the deliberate seven-day overlap, and the row count in the feature
+store grew only by genuinely new hours, confirming that the composite-key upsert
+behaves as designed.
+
+\emph{Resumable backfill.} The backfill was interrupted and restarted, and
+resumed only those cities whose stored history did not yet reach the requested
+start date, confirming the history-aware resume of
+Figure~\ref{fig:code-resume}.
+
+\emph{Registry round trip.} A model trained on one ephemeral runner was loaded by
+a different job on a different runner, confirming that the champion genuinely
+survives the machine that produced it - the property on which the entire
+serverless architecture rests.
+
+\emph{Promotion gating under repetition.} Training was run twice in close
+succession on effectively unchanged data. The first run promoted; the second
+produced an identical validation RMSE and was refused. This is reported in full in
+Section~\ref{sec:testing-gate}.
+
+System testing exercised the deployed public API directly.
+Table~\ref{tab:endpoints} reports the result of calling every endpoint against the
+live deployment.
+
+\begin{xltabular}{\textwidth}{P{5.4cm} Q{1.3cm} Q{1.6cm} Y}
+\caption{System validation against the live deployment.}\label{tab:endpoints}\\
+\toprule
+\bfseries Endpoint & \bfseries Status & \bfseries Latency & \bfseries Observation \\
+\midrule
+\endfirsthead
+\toprule
+\bfseries Endpoint & \bfseries Status & \bfseries Latency & \bfseries Observation \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+GET /api/health & 200 & 1.32\,s & Reports a forecast document present. \\
+GET /api/categories & 200 & 0.82\,s & Six categories with bounds and advice. \\
+GET /api/cities & 200 & 0.72\,s & All 22 cities with province and coordinates. \\
+GET /api/predictions & 200 & 1.51\,s & 190\,kB payload covering every city. \\
+GET /api/predictions/Lahore & 200 & 0.99\,s & 72 hourly points and three daily
+points. \\
+GET /api/leaderboard & 200 & 0.88\,s & Champion plus three run records. \\
+GET /api/evaluation & 200 & 0.74\,s & Ten per-horizon rows and five backtest
+folds. \\
+GET /api/monitoring & 200 & 0.74\,s & Drift table and forecast-error status. \\
+GET /api/explain/Lahore & 200 & 0.75\,s & Sentence plus five ranked
+contributions. \\
+GET /api/whatif/defaults & 200 & 0.95\,s & Five sliders initialised to live
+values. \\
+GET /api/predict (arbitrary point) & 200 & 0.98\,s & On-demand forecast for a city
+outside the supported list, confirming FR-22. \\
+POST /api/whatif & 200 & 1.15\,s & Baseline 38, scenario 39 under a raised wind
+speed; both categories returned. \\
+POST /api/chat & 503 & 0.74\,s & Returns the documented message that the advisor
+credential is not configured on the host. \\
+\end{xltabular}
+
+Twelve of the thirteen endpoints serve their documented payload. The thirteenth
+behaves exactly as specified when its optional credential is absent: it returns a
+specific, actionable message rather than failing inside the client library. This
+is the intended behaviour of the exception path in use case UC-7, but it is also
+an honest limitation of the current deployment, and it is recorded as such in
+Section~\ref{sec:testing-threats}.
+
+\section{Functional Test Cases}
+Table~\ref{tab:testcases} records the functional test cases, the requirement each
+exercises and its result.
+
+\begin{xltabular}{\textwidth}{Q{1.3cm} P{4.4cm} Q{1.5cm} Y}
+\caption{Functional test cases and results.}\label{tab:testcases}\\
+\toprule
+\bfseries ID & \bfseries Test & \bfseries Req. & \bfseries Result \\
+\midrule
+\endfirsthead
+\toprule
+\bfseries ID & \bfseries Test & \bfseries Req. & \bfseries Result \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+TC-1 & Ingest all cities and confirm 21 raw columns per city with retries
+configured. & FR-1 & Pass \\
+TC-2 & Engineer features and confirm the 74-column table with cyclical, lag,
+rolling and wind-vector families. & FR-2 & Pass \\
+TC-3 & Re-run ingestion within the overlap window and confirm no duplicate
+rows. & FR-3 & Pass \\
+TC-4 & Interrupt and restart the backfill; confirm only incomplete cities are
+reprocessed. & FR-3 & Pass \\
+TC-5 & Build the supervised set and confirm the horizon column takes exactly the
+ten declared values. & FR-4 & Pass \\
+TC-6 & Confirm the validation window lies entirely after the training window. &
+FR-5 & Pass \\
+TC-7 & Confirm all four candidate families are scored in a run. & FR-6 & Pass \\
+TC-8 & Retrain on unchanged data and confirm the tie is refused. & FR-7 &
+Pass \\
+TC-9 & Load the champion on a runner that did not train it. & FR-8 & Pass \\
+TC-10 & Confirm 72 hourly points and three daily points for every city. & FR-9 &
+Pass \\
+TC-11 & Confirm interval bounds present, ordered and horizon-dependent. & FR-10 &
+Pass \\
+TC-12 & Confirm every forecast point carries a health category. & FR-11 & Pass \\
+TC-13 & Confirm a hazard alert with peak, peak hour and first crossing for a city
+above the threshold. & FR-12 & Pass \\
+TC-14 & Confirm an explanation sentence and five ranked contributions per city. &
+FR-13 & Pass \\
+TC-15 & Confirm the global importance ranking is produced. & FR-14 & Pass \\
+TC-16 & Confirm slider defaults reflect live conditions. & FR-15 & Pass \\
+TC-17 & Run a scenario and confirm baseline, scenario, categories and delta. &
+FR-16 & Pass \\
+TC-18 & Confirm PSI is computed for all seven monitored features with a status
+each. & FR-17 & Pass \\
+TC-19 & Confirm forecasts are logged and the error report distinguishes ``waiting
+for actuals'' from a real score. & FR-18 & Pass \\
+TC-20 & Load all four dashboard views against the live backend. & FR-19 & Pass \\
+TC-21 & Confirm the four advisor tools are declared and dispatchable. & FR-20 &
+Pass \\
+TC-22 & Confirm the protocol server exposes the same four tools. & FR-21 &
+Pass \\
+TC-23 & Request an on-demand forecast for a city outside the supported list. &
+FR-22 & Pass \\
+TC-24 & Confirm the hourly and daily workflows run to completion on schedule. &
+FR-23 & Pass \\
+TC-25 & Request the advisor with no credential configured. & NFR-11 & Pass -
+returns the documented 503 message. \\
+\end{xltabular}
+
+\section{Model Evaluation}
+
+\subsection{Candidate Comparison}
+Table~\ref{tab:candidates} reports the champion training run. The supervised set
+was 200,000 rows, split chronologically into 160,002 training and 39,998
+validation rows.
+
+\begin{xltabular}{\textwidth}{P{5.0cm} C C C Y}
+\caption{Candidate comparison on the held-out chronological validation
+window.}\label{tab:candidates}\\
+\toprule
+\bfseries Model & \bfseries RMSE & \bfseries MAE & \bfseries $R^2$ & \bfseries Note \\
+\midrule
+\endfirsthead
+\toprule
+\bfseries Model & \bfseries RMSE & \bfseries MAE & \bfseries $R^2$ & \bfseries Note \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+XGBoost & 19.69 & 12.80 & 0.850 & Promoted champion \\
+Random forest & 20.38 & 13.56 & 0.839 & \\
+Ridge regression & 22.85 & 16.01 & 0.797 & Linear reference \\
+Persistence (baseline) & 25.27 & 15.71 & 0.752 & Not eligible for promotion \\
+\end{xltabular}
+
+Three observations follow. The champion reduces RMSE by 22.1\% relative to
+persistence, which establishes that the system has real forecasting skill rather
+than merely reproducing the current value. The gap between the linear model and
+the two ensembles - 22.85 against 20.38 and 19.69 - confirms the reading of the
+exploratory analysis in Section~\ref{sec:design-eda}, that the relationship is
+genuinely non-linear and interactive rather than an additive combination of
+weather variables. And the ordering of the two ensembles is consistent with the
+tabular-learning literature~\cite{ref:whytrees}, with boosting ahead of bagging on
+a problem of this shape.
+
+One detail is worth drawing out because it demonstrates why RMSE rather than MAE
+governs promotion. The persistence baseline has a \emph{lower} MAE than the Ridge
+model (15.71 against 16.01) while having a substantially higher RMSE (25.27
+against 22.85). Persistence is typically close but occasionally very wrong, which
+is exactly the behaviour RMSE penalises and MAE does not; for a health warning
+system, the large error during a rapid deterioration is the one that matters, so
+the squared metric is the appropriate gate.
+
+\subsection{Accuracy by Forecast Horizon}
+Table~\ref{tab:horizon} and Figure~\ref{fig:err-horizon} report accuracy at each
+modelled lead time, against the persistence baseline evaluated under the same
+mask.
+
+\begin{xltabular}{\textwidth}{C C C C C Y}
+\caption{Accuracy by forecast horizon, with the persistence baseline at the same
+horizon.}\label{tab:horizon}\\
+\toprule
+\bfseries Horizon (h) & \bfseries RMSE & \bfseries MAE & \bfseries $R^2$ &
+\bfseries Baseline RMSE & \bfseries Improvement \\
+\midrule
+\endfirsthead
+\toprule
+\bfseries Horizon (h) & \bfseries RMSE & \bfseries MAE & \bfseries $R^2$ &
+\bfseries Baseline RMSE & \bfseries Improvement \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+1 & 6.10 & 4.01 & 0.985 & 4.54 & $-34.4\%$ \\
+2 & 6.92 & 4.44 & 0.981 & 8.43 & $17.9\%$ \\
+3 & 7.88 & 5.13 & 0.975 & 11.52 & $31.6\%$ \\
+6 & 10.61 & 7.06 & 0.957 & 17.88 & $40.7\%$ \\
+12 & 14.78 & 10.46 & 0.917 & 22.89 & $35.4\%$ \\
+24 & 21.72 & 15.85 & 0.819 & 25.94 & $16.3\%$ \\
+36 & 25.76 & 19.15 & 0.746 & 33.35 & $22.8\%$ \\
+48 & 27.56 & 20.64 & 0.708 & 33.07 & $16.7\%$ \\
+60 & 27.57 & 20.53 & 0.721 & 35.64 & $22.6\%$ \\
+72 & 27.55 & 21.16 & 0.695 & 34.61 & $20.4\%$ \\
+\end{xltabular}
+
+\fig{error-by-horizon}{0.86}{RMSE against forecast horizon, compared with the
+persistence baseline.}{fig:err-horizon}
+
+The table is the single most informative result in this thesis, and it says three
+things.
+
+\emph{Skill decays with lead time, steeply and then gently.} $R^2$ falls from
+0.985 at one hour to 0.695 at 72, and RMSE rises from 6.10 to 27.55. Almost all of
+the degradation occurs in the first 36 hours; between 36 and 72 hours the error is
+essentially flat at 25.8 to 27.6. This plateau is interpretable: beyond about a
+day and a half the current pollution state has ceased to carry information, and
+the forecast is being driven almost entirely by the forecast weather and the
+calendar, whose informativeness does not decay much further over the remaining
+window.
+
+\emph{The model beats persistence at every horizon from two hours onward}, by
+between 16\% and 41\%, with the largest margins in the 6-to-12-hour range where
+the anchor state and the weather forecast are both informative. This is the
+result that justifies the system existing.
+
+\emph{At one hour, persistence wins.} Its RMSE of 4.54 is better than the
+model's 6.10. This is reported rather than omitted, and it is not a defect: at a
+lead time of one hour the air quality is overwhelmingly determined by the air
+quality of the preceding hour, and a global model trained jointly across ten
+horizons cannot specialise on that regime as tightly as the trivial predictor
+does. It is the price of the single-artefact design of
+Section~\ref{sec:design-mh}, it is confined to the horizon at which forecasting is
+least useful - nobody plans around the next sixty minutes - and the design would
+readily accommodate a blend towards persistence at very short lead times if that
+were wanted. Reporting it is exactly the kind of disclosure that a single averaged
+accuracy figure would have concealed.
+
+\subsection{Walk-Forward Backtest}
+Table~\ref{tab:backtest} and Figure~\ref{fig:walkforward} report the five-fold
+rolling backtest, in which each fold trains on an expanding window of the past and
+tests on the window that follows.
+
+\begin{xltabular}{\textwidth}{C C C C C Y}
+\caption{Five-fold walk-forward backtest.}\label{tab:backtest}\\
+\toprule
+\bfseries Fold & \bfseries Train rows & \bfseries Test rows & \bfseries Test from
+& \bfseries RMSE & \bfseries $R^2$ \\
+\midrule
+\endfirsthead
+\toprule
+\bfseries Fold & \bfseries Train rows & \bfseries Test rows & \bfseries Test from
+& \bfseries RMSE & \bfseries $R^2$ \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+1 & 33,335 & 33,333 & 2023-08-13 & 21.06 & 0.795 \\
+2 & 66,668 & 33,333 & 2024-03-22 & 17.56 & 0.734 \\
+3 & 100,001 & 33,333 & 2024-10-30 & 26.44 & 0.778 \\
+4 & 133,334 & 33,333 & 2025-06-07 & 19.03 & 0.847 \\
+5 & 166,667 & 33,333 & 2026-01-14 & 18.67 & 0.814 \\
+\end{xltabular}
+
+\fig{walk-forward}{0.86}{RMSE by walk-forward fold.}{fig:walkforward}
+
+The mean backtest RMSE is 20.55 with a standard deviation of 3.53. Two features of
+this result matter more than the mean.
+
+First, the backtest mean is slightly \emph{worse} than the single-split validation
+figure of 19.69, and that is the expected and desirable direction. Early folds
+train on as little as a fifth of the data, so the backtest deliberately measures
+performance under conditions harsher than production; a backtest that flattered the
+single split would be evidence of a leak rather than of quality.
+
+Second, the fold-to-fold variation is itself informative. Fold~3, which tests from
+30~October~2024, is much the worst at 26.44, while fold~2, testing from late March,
+is the best at 17.56. The two are the winter smog season and the clean spring
+respectively. The model is therefore measurably harder to fit in the season that
+matters most - which is precisely why the nightly retraining and the drift
+monitoring exist, and it is a caution against quoting the annual mean error as
+though it applied uniformly across the year.
+
+\subsection{The Sequence-Model Comparison}
+The LSTM was evaluated on a deliberately fair footing: the same 24-hour-ahead
+task, the same chronological split, the same metrics and the same baseline.
+Table~\ref{tab:lstm} reports the comparison.
+
+\begin{xltabular}{\textwidth}{P{5.6cm} C C C Y}
+\caption{Sequence model against the tree ensemble at a 24-hour
+horizon.}\label{tab:lstm}\\
+\toprule
+\bfseries Model (predict AQI at +24\,h) & \bfseries RMSE & \bfseries MAE &
+\bfseries $R^2$ & \bfseries Note \\
+\midrule
+\endfirsthead
+\toprule
+\bfseries Model (predict AQI at +24\,h) & \bfseries RMSE & \bfseries MAE &
+\bfseries $R^2$ & \bfseries Note \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+LSTM (two recurrent layers, dense head) & 22.12 & 14.32 & 0.799 & Best at this
+single horizon \\
+XGBoost (same 24-hour task) & 22.63 & 14.48 & 0.789 & \\
+Persistence (baseline) & 28.79 & 17.21 & 0.660 & \\
+\end{xltabular}
+
+The sequence model wins, narrowly: 22.12 against 22.63, a 2.3\% reduction in RMSE.
+Both learned models beat persistence by roughly 22\%, which independently confirms
+that the task has learnable structure.
+
+It was nonetheless not promoted, for three reasons that are worth stating
+explicitly because the decision runs against the narrow measurement.
+
+First, \emph{coverage}. The LSTM as constructed predicts one horizon; the
+production model serves all ten, at an overall RMSE of 19.69. Replacing the
+champion with the sequence model would mean either training ten of them or serving
+only one lead time, and the resulting system would be worse on the metric that
+actually matters to a user, which is the quality of the whole three-day curve.
+
+Second, \emph{cost}. The sequence model takes roughly 25 minutes to train against
+roughly one minute for the ensemble on the same hardware. Within the scheduler's
+time limit, ten of them do not fit. The nightly retrain - which is the mechanism
+by which the entire system stays current - would have to be abandoned to adopt
+the model that is 2.3\% better at one horizon.
+
+Third, \emph{explainability}. Exact Shapley attribution is available in polynomial
+time for the tree ensemble~\cite{ref:treeshap} and is not for the recurrent
+network, so promoting it would mean withdrawing the explanation that
+Chapter~\ref{ch:ui} shows on every forecast.
+
+The finding is reported as a positive one. The sequence model is a legitimate and
+competitive alternative, and the comparison is exactly what the tabular-learning
+literature~\cite{ref:tabnotall,ref:whytrees} would predict: no decisive advantage
+for the deep architecture on a tabular, weather-driven problem. The production
+choice was made on the total system objective rather than on a single number, and
+the measurement is what allows that to be said rather than assumed.
+
+\subsection{Feature Importance}
+Figure~\ref{fig:shap} shows the global feature importance obtained by averaging
+absolute Shapley values over a sample of the supervised set.
+
+\fig{shap-importance}{0.78}{Global feature importance by mean absolute Shapley
+value.}{fig:shap}
+
+The ranking is physically coherent, which is itself a form of validation. The
+anchor state - the current index and its recent means - dominates, as it must
+for a persistent quantity. The horizon feature ranks highly, which is direct
+evidence that the model has learned to modulate its behaviour by lead time rather
+than treating all horizons alike; this is the mechanism by which one artefact can
+serve ten horizons. Among the meteorological drivers, the dispersion-related
+variables carry the most weight, consistent with the physical account of the smog
+season given in Chapter~\ref{ch:literature}. Nothing implausible appears near the
+top, which is a check that would have caught a leaked or mis-specified feature.
+
+\section{Uncertainty Calibration}
+Prediction intervals are the tenth and ninetieth residual percentiles computed per
+horizon on the held-out validation window, giving a nominal 80\% interval. By
+construction the intervals attain approximately 80\% coverage on that window, and
+they widen with horizon in proportion to the model's actual errors, which is the
+behaviour the design intended and which is visible as the widening band in
+Figure~\ref{fig:ui-forecast}.
+
+Two limitations must be stated. The construction inherits the exchangeability
+assumption of split conformal prediction~\cite{ref:leiconformal}, which a
+seasonal, non-stationary series does not strictly satisfy; coverage during a
+regime the calibration window did not contain - an unusually severe smog episode,
+for instance - should be expected to be worse than nominal. And coverage has not
+yet been measured prospectively on live forecasts, because doing so requires a
+sufficient volume of matured forecast-outcome pairs. The machinery to perform that
+measurement exists in the forecast log described in
+Section~\ref{sec:impl-monitoring}, and it is identified as future work.
+
+\section{Operational Evidence from the Running System}
+
+\subsection{The Promotion Gate in Production}
+\label{sec:testing-gate}
+The leaderboard is the record of the gate's behaviour, and is reproduced in
+Table~\ref{tab:leaderboard}.
+
+\begin{xltabular}{\textwidth}{C P{3.0cm} P{2.0cm} C C Y}
+\caption{The production model leaderboard.}\label{tab:leaderboard}\\
+\toprule
+\bfseries Ver & \bfseries Trained & \bfseries Model & \bfseries RMSE &
+\bfseries $R^2$ & \bfseries Outcome \\
+\midrule
+\endfirsthead
+\toprule
+\bfseries Ver & \bfseries Trained & \bfseries Model & \bfseries RMSE &
+\bfseries $R^2$ & \bfseries Outcome \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+1 & 2026-08-19 17:32 & XGBoost & 20.597 & 0.824 & Promoted - first champion \\
+2 & 2026-08-28 14:28 & XGBoost & 19.687 & 0.850 & Promoted - current champion \\
+3 & 2026-08-28 15:28 & XGBoost & 19.687 & 0.850 & Rejected - no improvement \\
+\end{xltabular}
+
+The three rows demonstrate all three behaviours the gate is required to exhibit.
+Version~1 was promoted unconditionally as the first champion. Version~2, trained
+after the full historical backfill had completed, improved RMSE from 20.597 to
+19.687 - a 4.4\% reduction obtained purely from more history - and displaced the
+incumbent, which is the retraining loop delivering measurable value. Version~3,
+trained an hour later on effectively unchanged data, produced an identical 19.687
+and was refused, because the promotion rule requires strict improvement. That
+refusal is the most important row in the table: it is the system declining to
+replace its production model for no gain, which is precisely what the gate exists
+to do and what an ungated nightly retrain would not have done.
+
+\subsection{Drift Monitoring in Production}
+Table~\ref{tab:drift} reports the drift status computed over the most recent
+fourteen days against the historical reference.
+
+\begin{xltabular}{\textwidth}{P{4.4cm} C P{2.6cm} Y}
+\caption{Population Stability Index by feature, recent fourteen days against the
+historical reference.}\label{tab:drift}\\
+\toprule
+\bfseries Feature & \bfseries PSI & \bfseries Status & \bfseries Interpretation \\
+\midrule
+\endfirsthead
+\toprule
+\bfseries Feature & \bfseries PSI & \bfseries Status & \bfseries Interpretation \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+temperature\_2m & 3.942 & significant & Seasonal transition; the recent window
+occupies a temperature range the annual reference visits only briefly. \\
+surface\_pressure & 1.253 & significant & Moves with the same seasonal cycle. \\
+relative\_humidity\_2m & 0.393 & significant & Monsoon-season humidity against an
+all-year reference. \\
+aqi & 0.303 & significant & The target distribution has shifted with the season. \\
+pm2\_5 & 0.257 & significant & Just above the threshold, consistent with the
+index. \\
+pm10 & 0.031 & stable & Coarse particulate matter is less seasonally
+modulated. \\
+wind\_speed\_10m & 0.014 & stable & Wind distribution is broadly stationary. \\
+\end{xltabular}
+
+The overall status is \emph{significant}, driven by temperature. This is the
+expected result and not a fault, and reading it correctly is the point of the
+design in Section~\ref{sec:impl-monitoring}. A fourteen-day window compared
+against a multi-year reference will always look shifted on any strongly seasonal
+variable, because two weeks of one season cannot resemble an average over all
+seasons. That five of the seven monitored features register as significant while
+the two least seasonal remain stable is itself corroboration that the measure is
+detecting seasonality rather than a data fault.
+
+The correct operational response is the one the system already takes: retrain
+nightly, so that the training distribution tracks the current one. What would
+constitute a genuine alarm is drift accompanied by rising realised error, which is
+why the second monitoring signal exists. At the time of writing that signal
+correctly reports that forecasts have been logged and are awaiting matured
+observations, rather than displaying a fabricated score.
+
+\section{Non-Functional Testing}
+Table~\ref{tab:nfrtest} records how the non-functional requirements were
+verified.
+
+\begin{xltabular}{\textwidth}{Q{1.5cm} P{3.4cm} Y}
+\caption{Verification of the non-functional requirements.}\label{tab:nfrtest}\\
+\toprule
+\bfseries ID & \bfseries Requirement & \bfseries Evidence \\
+\midrule
+\endfirsthead
+\toprule
+\bfseries ID & \bfseries Requirement & \bfseries Evidence \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+NFR-1 & Free-tier operation & Ingestion is keyless and free; scheduled compute,
+feature storage and static hosting are within free allowances; only the container
+host and the optional advisor carry any cost. \\
+NFR-2 & Statelessness & A model trained on one runner was loaded by a different
+job on another, and the deployed backend serves a champion it never trained. \\
+NFR-3 & Performance & All eleven read endpoints responded in 0.72 to 1.51 seconds,
+serving pre-computed documents; no page view invokes a model. \\
+NFR-4 & Explainability & Every forecast point carries interval bounds; every city
+in the live payload carries an explanation object. \\
+NFR-5 & Groundedness & The advisor answers only through the four declared tools,
+which read the same forecast document the dashboard reads. \\
+NFR-6 & Honest framing & The what-if panel states that it is a model simulation
+and not causal proof. \\
+NFR-7 & Reproducibility & Seeds fixed for every estimator and for subsampling; the
+split is defined by time rather than by chance. \\
+NFR-8 & Resilience & Explanation, monitoring and forecast logging are each
+wrapped; a per-city failure in inference costs one city, not the run. \\
+NFR-9 & Auditability & The leaderboard, evaluation report and monitoring report
+are committed each night and served publicly. \\
+NFR-10 & Portability & The full pipeline runs locally against the Parquet backend
+on a platform where the managed client cannot be installed. \\
+NFR-11 & Graceful degradation & The advisor returns a specific 503 message when
+unconfigured; the what-if tab is hidden in static mode; the monitoring endpoint
+has three levels of fallback. \\
+NFR-12 & Maintainability & Layered modules with one-directional dependencies;
+cities, paths and horizons defined in exactly one module. \\
+NFR-13 & Usability & EPA colour scale and category names used throughout; layout
+stacks on a narrow viewport; the generation time is displayed in the header. \\
+NFR-14 & Politeness to the source & Retry with exponential backoff; three-month
+chunking; coverage-based resume avoids refetching. \\
+NFR-15 & Security & No credential in the repository; secrets injected from the
+environment locally and from the workflow secret store in automation. \\
+\end{xltabular}
+
+\section{Threats to Validity}
+\label{sec:testing-threats}
+Seven threats to the validity of these results are acknowledged.
+
+\textbf{Modelled rather than measured ground truth.} The target is a modelled
+index derived from an atmospheric composition product, not a reading from a
+reference-grade station in each city. The system therefore demonstrates skill at
+forecasting that product. Where the product diverges from a local station, the
+forecast inherits the divergence. Validating against ground stations is the single
+most valuable extension available to this work.
+
+\textbf{Optimistic weather at training time.} The model is trained on the weather
+that actually occurred at the target hour and deployed on the forecast weather for
+that hour. The reported validation errors are therefore a mild under-estimate of
+operational error, and the gap widens with horizon, since weather forecasts
+themselves degrade. This is standard practice, but it is a real bias in the
+direction of flattery.
+
+\textbf{Coverage has not been verified prospectively.} The 80\% intervals attain
+their nominal coverage on the calibration window by construction; whether they do
+so on live forecasts has not yet been measured, and the exchangeability assumption
+gives reason to expect degradation during unusual regimes.
+
+\textbf{Limited unit-test coverage.} The suite covers the index computation and
+the feature layer thoroughly and leaves the promotion gate, the interval
+construction, the drift computation and the API handlers to integration and system
+testing. Those components are exercised in production, but a regression in one of
+them would not be caught before deployment.
+
+\textbf{A short operational record.} The leaderboard contains three runs and the
+realised-error monitor has not yet accumulated matured forecast-outcome pairs. The
+gate's behaviour is demonstrated but its long-run behaviour - how often a genuine
+improvement occurs, whether a degraded model is ever correctly refused - is not
+yet evidenced.
+
+\textbf{A single evaluation regime.} The champion metrics come from one
+chronological split whose validation window falls in a particular part of the
+year. The walk-forward backtest mitigates this, and its fold-to-fold spread of
+17.56 to 26.44 quantifies how much the answer depends on which season is being
+tested.
+
+\textbf{No user study.} The interface's claims - that the explanation is
+understandable, that the colour scale communicates risk, that the alert prompts
+action - are argued from design principles and are not empirically established.
+
+\section{Discussion}
+Taken together, the results support four conclusions.
+
+The system forecasts with genuine skill. It reduces RMSE by 22\% against
+persistence, and beats it at every horizon from two hours to three days. The skill
+is real, it is measured against the correct reference, and it is reported at the
+granularity at which it is used.
+
+The skill is honestly bounded. $R^2$ falls from 0.985 to 0.695 across the
+forecast window, the backtest is slightly worse than the single split, the winter
+fold is markedly worse than the spring fold, and persistence beats the model at a
+one-hour lead. None of this is concealed, and the fact that a public dashboard
+displays the decaying error curve is a deliberate design position rather than an
+oversight.
+
+The operational machinery works and has already earned its place. Retraining after
+the backfill improved RMSE by 4.4\%; the gate then refused an identical model an
+hour later. Both events are recorded in a leaderboard that a member of the public
+can read. This is the difference between a model and a system.
+
+Finally, the model choice was made by measurement rather than fashion. A sequence
+model was built, evaluated fairly, found to be 2.3\% better at one horizon, and
+declined on grounds of coverage, cost and explainability - with the reasoning
+recorded so that a reader can disagree with it.
+
+\section{Summary of Testing and Evaluation}
+This chapter reported twelve passing unit tests concentrated on the two
+components whose failures would be silent, four integration properties confirmed
+on live infrastructure, and thirteen endpoints exercised against the live
+deployment, twelve serving their documented payload and the thirteenth degrading
+exactly as specified. It reported the champion's accuracy - RMSE 19.69, MAE
+12.80, $R^2$ 0.850 - against three alternatives, per-horizon accuracy against a
+per-horizon baseline, a five-fold walk-forward backtest averaging 20.55, a fair
+comparison with a recurrent sequence model, the global feature importance, the
+production leaderboard including a refused promotion, and the current drift
+status with its seasonal interpretation. It verified every non-functional
+requirement and set out seven threats to the validity of these results. The next
+chapter concludes.

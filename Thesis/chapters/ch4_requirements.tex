@@ -1,0 +1,525 @@
+\chapter{Requirement Analysis}
+\label{ch:requirements}
+
+\section{Introduction}
+This chapter converts the problem stated in Chapter~\ref{ch:problem} into a
+specification. It describes how the requirements were elicited, identifies the
+stakeholders and what each of them needs from the system, presents the use case
+model, narrates the principal use cases in full, enumerates the functional and
+non-functional requirements, records the hardware and software the system
+depends on, and closes with a traceability matrix linking every requirement back
+to the gap that motivated it and forward to the chapter in which it is realised.
+
+\section{Requirement Elicitation Method}
+The project had no external client, so requirements could not simply be
+collected by interview. Four complementary techniques were used instead.
+
+\textbf{Scenario construction.} Concrete situations were written down and used as
+the primary source of functional requirements. Three of them shaped the interface
+directly: a parent in Faisalabad deciding on Tuesday whether Thursday's outdoor
+sports practice is safe; a construction supervisor in Multan deciding which of
+the next three days to schedule outdoor work; and a person with asthma in Lahore
+deciding whether to carry a mask tomorrow morning. Each scenario was traced
+through the interface until it either produced an answer or exposed a missing
+capability - the three-day aggregated view, the hazard banner and the ``cleanest
+time of day'' question all originated this way.
+
+\textbf{Analysis of the data.} A substantial exploratory study of the assembled
+dataset, reported in Section~\ref{sec:design-eda}, was carried out before the
+interface was designed. Several requirements came directly out of it. The finding
+that January averages 146.8 against 91.5 in the cleanest month established that
+the model would face strong recurring drift and therefore that drift monitoring
+was necessary. The finding that the cities differ enormously - Faisalabad's mean
+is roughly double Gilgit's - established that a city comparison view was
+worthwhile and motivated the map.
+
+\textbf{Adoption of published practice.} The operational requirements were taken
+from the literature rather than invented. The production-readiness rubric of
+Breck et al.~\cite{ref:mltestscore} supplied the requirements that the model be
+compared against a simpler baseline, that training be reproducible, that model
+quality be validated before serving and that rollback be possible. The
+champion-challenger discipline~\cite{ref:siddiqi} supplied the promotion gate,
+and the drift literature~\cite{ref:driftsurvey} supplied the monitoring
+requirement.
+
+\textbf{Iterative refinement from observed failure.} Because the lifecycle was
+iterative, several requirements were discovered by running the system. The
+requirement that ingestion be resumable and idempotent (FR-3) was not in the
+original plan; it was added after a backfill froze partway through. The
+requirement that the interface degrade gracefully when the backend is unavailable
+(NFR-11) was added after the first deployment attempt served an interface with no
+data behind it.
+
+\section{Stakeholder Analysis}
+Table~\ref{tab:stakeholders} identifies the stakeholders, their interest in the
+system and the requirements that follow from that interest.
+
+\begin{xltabular}{\textwidth}{P{2.9cm} P{4.4cm} Y}
+\caption{Stakeholder analysis.}\label{tab:stakeholders}\\
+\toprule
+\bfseries Stakeholder & \bfseries Interest in the system & \bfseries Requirements arising \\
+\midrule
+\endfirsthead
+\toprule
+\bfseries Stakeholder & \bfseries Interest in the system & \bfseries Requirements arising \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+General public (resident) & Wants to know whether the air will be safe over the
+next few days, in their own city, in terms they can act on. & Multi-day forecast;
+city selection; health category and advice rather than a bare number; a
+prominent warning when the air will be dangerous; a plain-language explanation. \\
+Vulnerable individuals & Children, the elderly and people with respiratory or
+cardiac conditions face harm at lower exposure than the general population. &
+Hourly resolution so that a safer time of day can be identified; explicit advice
+per category; the earliest hour at which the unhealthy threshold is crossed. \\
+Analyst or operator & Needs to know whether the system is still working and
+whether its output can be trusted. & Published leaderboard and promotion history;
+per-horizon accuracy; walk-forward backtest; drift status; realised forecast
+error. \\
+Assessor or reviewer & Needs to judge the engineering, not merely the output. &
+Reproducibility; version history; documented architecture; unit tests; an audit
+trail of model decisions. \\
+Data provider (Open-Meteo) & Provides the observations free of charge and without
+authentication. & Polite request behaviour with retry and backoff; no
+unnecessary re-fetching; attribution in the interface. \\
+Platform providers & Supply free scheduling, feature storage and hosting. &
+Operation within free-tier limits; jobs that finish inside time caps; no
+unbounded storage growth. \\
+\end{xltabular}
+
+\section{Use Case Diagram}
+Figure~\ref{fig:usecase} presents the use case model. It distinguishes three
+kinds of participant: the human actors who consume or operate the system, the
+external data provider, and the scheduler, which is treated as a system actor
+because it initiates the majority of the system's activity without any person
+being present.
+
+\fig{usecase}{0.92}{Use case diagram. Blue cases are public, green cases are
+operational, and amber cases are automated and are initiated by the scheduler
+rather than by a person.}{fig:usecase}
+
+The most important structural feature of the diagram is that the four amber cases
+have no human actor attached to them at all. This is the property that
+distinguishes the system from a conventional application: its principal behaviour
+- ingesting, retraining, gating, forecasting and monitoring - occurs on a
+schedule, and the human actors interact with the results rather than with the
+process.
+
+\section{Use Case Narratives}
+
+\subsection{View the Three-Day Forecast}
+\begin{xltabular}{\textwidth}{Q{2.9cm} Y}
+\toprule
+\bfseries Use case ID & UC-1 \\
+\bfseries Actor & Resident \\
+\bfseries Goal & To learn what the air quality will be in a chosen city over the
+next three days. \\
+\bfseries Preconditions & A forecast document produced by a completed inference
+run is available to the interface. \\
+\bfseries Main flow & 1.~The user opens the dashboard. 2.~The system loads the
+forecast document and displays the default city. 3.~The user selects a city from
+the list of 22. 4.~The system displays the current index and its health
+category, a chart of the next 72 hours with the 80\% prediction band, and the
+category colour scale. 5.~The user switches to the daily view. 6.~The system
+displays three calendar days, each with a mean index, a band and a category. \\
+\bfseries Alternative flow & 3a.~The user instead selects a city by clicking its
+marker on the map; the system updates the selection identically. \\
+\bfseries Exception flow & 2a.~The forecast document cannot be retrieved. The
+system displays an explanatory notice naming the failure rather than an empty
+chart. \\
+\bfseries Postcondition & The user has an hourly and a daily forecast, with
+uncertainty, for the selected city. \\
+\bfseries Requirements & FR-9, FR-10, FR-11, FR-19, NFR-3, NFR-11 \\
+\bottomrule
+\end{xltabular}
+
+\subsection{Receive a Hazard Warning}
+\begin{xltabular}{\textwidth}{Q{2.9cm} Y}
+\toprule
+\bfseries Use case ID & UC-2 \\
+\bfseries Actor & Resident, in particular a vulnerable individual \\
+\bfseries Goal & To be warned, in advance, that the air is forecast to become
+dangerous, and to be told when. \\
+\bfseries Preconditions & A forecast exists for the selected city. \\
+\bfseries Main flow & 1.~During inference the system scans the city's 72-hour
+curve. 2.~If the peak reaches the unhealthy threshold it classifies the episode
+as a warning; if it reaches the very unhealthy threshold it classifies it as a
+danger. 3.~It records the peak value, the hour of the peak, the category, the
+standard advice for that category and the first hour at which the warning
+threshold is crossed. 4.~The dashboard renders this as a banner above the
+forecast whenever the severity is not none. \\
+\bfseries Alternative flow & 2a.~The peak stays below the warning threshold; no
+banner is shown and the forecast is presented normally. \\
+\bfseries Postcondition & The user knows that an episode is coming, how bad it
+will be, when it starts and what to do. \\
+\bfseries Requirements & FR-12, FR-19, NFR-3 \\
+\bottomrule
+\end{xltabular}
+
+\subsection{Understand Why the Forecast Is High}
+\begin{xltabular}{\textwidth}{Q{2.9cm} Y}
+\toprule
+\bfseries Use case ID & UC-3 \\
+\bfseries Actor & Resident \\
+\bfseries Goal & To understand what is driving the forecast, rather than being
+asked to accept a number. \\
+\bfseries Preconditions & A champion model and a forecast for the city exist. \\
+\bfseries Main flow & 1.~During inference the system identifies the hour with the
+highest predicted index. 2.~It computes exact Shapley attributions for that
+single prediction against the model's base value. 3.~It selects the five largest
+contributions by absolute magnitude and translates each feature name into a
+human-readable label. 4.~It composes a sentence stating the forecast value, the
+base value and the signed contributions. 5.~The dashboard shows the sentence and
+a signed bar for each contribution. \\
+\bfseries Exception flow & 2a.~The attribution computation fails. The failure is
+logged and the forecast is published without an explanation; the explanation card
+is simply omitted. Explainability must never prevent a forecast from being
+issued. \\
+\bfseries Postcondition & The user can see which drivers pushed the forecast up
+and which pushed it down, and by how much. \\
+\bfseries Requirements & FR-13, FR-14, NFR-4, NFR-8 \\
+\bottomrule
+\end{xltabular}
+
+\subsection{Run a What-If Scenario}
+\begin{xltabular}{\textwidth}{Q{2.9cm} Y}
+\toprule
+\bfseries Use case ID & UC-4 \\
+\bfseries Actor & Resident or analyst \\
+\bfseries Goal & To interrogate the model by changing its inputs and observing
+how the forecast responds. \\
+\bfseries Preconditions & The live backend and the champion model are reachable. \\
+\bfseries Main flow & 1.~The user opens the What-If tab. 2.~The system builds the
+model input for the selected city at a lead time of 24 hours from live data and
+returns the current real value of each of the five adjustable drivers, so that
+the sliders begin at reality. 3.~The user adjusts one or more sliders.
+4.~The user runs the simulation. 5.~The system predicts once with the unmodified
+input and once with the overridden input and returns both values, both health
+categories and the difference. 6.~The dashboard shows the two values side by
+side, colour-coded by category, with the change. \\
+\bfseries Exception flow & 2a.~The backend is unavailable, in which case the tab
+is not offered at all rather than being offered and failing. \\
+\bfseries Postcondition & The user has seen the model respond to a
+counterfactual, clearly labelled as a model simulation rather than a causal
+claim. \\
+\bfseries Requirements & FR-15, FR-16, NFR-6, NFR-11 \\
+\bottomrule
+\end{xltabular}
+
+\subsection{Retrain and Gate the Model}
+\begin{xltabular}{\textwidth}{Q{2.9cm} Y}
+\toprule
+\bfseries Use case ID & UC-5 \\
+\bfseries Actor & Scheduler (system actor) \\
+\bfseries Goal & To incorporate new data into the model without allowing an
+unattended run to degrade the service. \\
+\bfseries Preconditions & The feature store holds the accumulated history; the
+scheduled time has arrived. \\
+\bfseries Main flow & 1.~The scheduler starts the training job. 2.~The job reads
+the whole feature table. 3.~It constructs the multi-horizon supervised set and
+subsamples it to the configured limit. 4.~It splits chronologically, holding out
+the most recent fifth as validation. 5.~It scores the persistence baseline and
+trains the three learned candidates. 6.~It selects the best fitted candidate by
+validation RMSE as the challenger. 7.~It computes residual quantiles per horizon
+for the prediction intervals. 8.~It compares the challenger with the reigning
+champion. 9.~If the challenger is better it demotes the incumbent, records the
+promotion and writes the bundle to the model registry; otherwise it records a
+refusal and leaves the serving model untouched. 10.~It refreshes the evaluation
+and monitoring reports and commits the artefacts. \\
+\bfseries Alternative flow & 9a.~No champion exists yet, in which case the
+challenger is promoted unconditionally as the first champion. \\
+\bfseries Exception flow & 2a.~The feature store is unreachable; the job fails
+loudly and the previous champion continues to serve, because promotion is the
+only path by which the serving model can change. \\
+\bfseries Postcondition & Either a strictly better model is in service, or the
+previous model is still in service; in both cases the decision is recorded. \\
+\bfseries Requirements & FR-4, FR-5, FR-6, FR-7, FR-8, NFR-1, NFR-7, NFR-9 \\
+\bottomrule
+\end{xltabular}
+
+\subsection{Monitor Drift and Realised Error}
+\begin{xltabular}{\textwidth}{Q{2.9cm} Y}
+\toprule
+\bfseries Use case ID & UC-6 \\
+\bfseries Actor & Analyst; initiated by the scheduler \\
+\bfseries Goal & To detect that the world has changed, and to know whether the
+forecasts have actually been right. \\
+\bfseries Preconditions & The feature store holds both historical and recent
+rows; previous forecasts have been logged. \\
+\bfseries Main flow & 1.~The system divides the feature history into a reference
+window and the most recent fourteen days. 2.~For each monitored feature it bins
+the reference distribution into deciles and computes the Population Stability
+Index of the recent window against it. 3.~It classifies each feature as stable,
+moderate or significant and identifies the worst. 4.~It loads the forecast log
+and joins it to the observed index on city and target hour. 5.~It computes MAE
+and RMSE over the joined rows and lists the five largest misses. 6.~It writes the
+combined report, which the dashboard displays. \\
+\bfseries Alternative flow & 4a.~No forecast has yet matured into an observation,
+in which case the report states that scoring is waiting for actuals rather than
+reporting a spurious zero. \\
+\bfseries Postcondition & The operator can see both whether the inputs have moved
+and whether accuracy has suffered. \\
+\bfseries Requirements & FR-17, FR-18, NFR-9 \\
+\bottomrule
+\end{xltabular}
+
+\subsection{Ask the Advisor a Question}
+\begin{xltabular}{\textwidth}{Q{2.9cm} Y}
+\toprule
+\bfseries Use case ID & UC-7 \\
+\bfseries Actor & Resident \\
+\bfseries Goal & To ask a question in ordinary language and receive an answer
+grounded in the system's real forecasts. \\
+\bfseries Preconditions & The backend is reachable and an advisor credential is
+configured. \\
+\bfseries Main flow & 1.~The user types a question, or selects a suggested one.
+2.~The backend sends the question to the language model together with the
+declarations of four tools: list cities, get forecast, get history summary and
+explain prediction. 3.~The model returns a structured tool call. 4.~The backend
+executes the corresponding function against the real forecast data and returns
+the result. 5.~Steps 3 and 4 repeat until the model produces a final answer, up
+to a bounded number of rounds. 6.~The answer is returned and displayed. \\
+\bfseries Exception flow & 1a.~No credential is configured; the endpoint returns
+a clear, specific message and the interface reports that the advisor is
+unavailable rather than failing silently. 5a.~The round limit is reached; the
+system asks the user to rephrase. \\
+\bfseries Postcondition & The user has an answer whose numbers came from the
+system's own forecasts rather than from the language model's parameters. \\
+\bfseries Requirements & FR-20, FR-21, NFR-5, NFR-11 \\
+\bottomrule
+\end{xltabular}
+
+\section{Functional Requirements}
+Table~\ref{tab:fr} enumerates the functional requirements. Priorities are
+essential (E), important (I) or desirable (D).
+
+\begin{xltabular}{\textwidth}{Q{1.5cm} Y Q{1.1cm}}
+\caption{Functional requirements.}\label{tab:fr}\\
+\toprule
+\bfseries ID & \bfseries Requirement & \bfseries Pri. \\
+\midrule
+\endfirsthead
+\toprule
+\bfseries ID & \bfseries Requirement & \bfseries Pri. \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+FR-1 & The system shall fetch hourly pollutant and weather observations for all
+22 supported cities from a free public API, retrying transient failures with
+exponential backoff. & E \\
+FR-2 & The system shall engineer, per city and without cross-city contamination,
+a feature table containing calendar, cyclical, wind-vector, lag, rolling and
+change-rate features, and shall compute the EPA index as the target. & E \\
+FR-3 & The system shall upsert engineered features into a feature store on a
+composite key of city and timestamp, so that repeated or overlapping runs never
+duplicate rows, and shall support a resumable historical backfill. & E \\
+FR-4 & The system shall assemble a supervised dataset in which the forecast
+horizon is an input feature and the target is the index observed at that horizon
+ahead. & E \\
+FR-5 & The system shall split training and validation data strictly
+chronologically, never randomly. & E \\
+FR-6 & The system shall train and score at least one baseline and three learned
+candidate families in every training run, and shall report RMSE, MAE and $R^2$
+for each. & E \\
+FR-7 & The system shall promote a newly trained challenger to champion only if
+it improves on the incumbent champion's validation RMSE, and shall record every
+run, promoted or refused, in a persistent leaderboard. & E \\
+FR-8 & The system shall store the promoted champion in a durable versioned model
+registry that survives the destruction of the machine that trained it, and shall
+load the champion from that registry at inference. & E \\
+FR-9 & The system shall produce, for each supported city, a 72-hour hourly
+forecast of the index and a three-day aggregation of it. & E \\
+FR-10 & The system shall attach to every forecast point a prediction interval
+derived from the empirical residual quantiles for that horizon. & E \\
+FR-11 & The system shall label every forecast value with its EPA health category
+and the standard advice for that category. & E \\
+FR-12 & The system shall raise a graded hazard alert when a city's forecast peak
+reaches the unhealthy or very unhealthy threshold, reporting the peak value, the
+hour of the peak and the first crossing of the threshold. & E \\
+FR-13 & The system shall compute Shapley attributions for the peak forecast hour
+of each city and render the leading contributions as a plain-language sentence. & I \\
+FR-14 & The system shall produce a global feature-importance ranking from
+aggregated Shapley values. & D \\
+FR-15 & The system shall expose the current real value of each adjustable driver
+so that a what-if scenario begins from present conditions. & I \\
+FR-16 & The system shall re-predict under user-supplied driver overrides and
+return both the baseline and the scenario value with their categories. & I \\
+FR-17 & The system shall compute the Population Stability Index per monitored
+feature between a recent window and a historical reference, and classify each as
+stable, moderate or significant. & I \\
+FR-18 & The system shall log every issued forecast and later join it to the
+observed index, reporting realised MAE, RMSE and the largest misses. & I \\
+FR-19 & The system shall present the forecast, the map, the model leaderboard,
+the per-horizon and backtest evaluation, and the monitoring report through a
+public browser interface. & E \\
+FR-20 & The system shall expose forecast, history and explanation functions as
+declared tools so that a language model can answer questions from real data. & D \\
+FR-21 & The system shall publish the same tools over the Model Context Protocol
+for use by external clients. & D \\
+FR-22 & The system shall serve an on-demand forecast for an arbitrary coordinate
+pair, not only for the 22 pre-computed cities. & D \\
+FR-23 & The system shall run ingestion hourly and retraining, inference,
+evaluation and monitoring daily, without human initiation. & E \\
+\end{xltabular}
+
+\section{Non-Functional Requirements}
+Table~\ref{tab:nfr} enumerates the non-functional requirements. Several of these
+were as influential on the design as the functional requirements: NFR-1 and
+NFR-2 between them dictated the entire architecture.
+
+\begin{xltabular}{\textwidth}{Q{1.6cm} P{2.9cm} Y}
+\caption{Non-functional requirements.}\label{tab:nfr}\\
+\toprule
+\bfseries ID & \bfseries Category & \bfseries Requirement \\
+\midrule
+\endfirsthead
+\toprule
+\bfseries ID & \bfseries Category & \bfseries Requirement \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+NFR-1 & Cost & Every component shall operate within a free or negligible-cost
+tier, so that the service can run indefinitely without a funding decision. \\
+NFR-2 & Statelessness & No pipeline shall depend on state held on the machine
+that ran a previous pipeline; all durable state shall live in the feature store,
+the model registry or the repository. \\
+NFR-3 & Performance & A page view shall not wait for a model to run: the served
+forecast shall be a pre-computed document, read from disk. \\
+NFR-4 & Explainability & No forecast shall be presented as a bare number; each
+shall carry both an uncertainty band and, where computation permits, an
+explanation. \\
+NFR-5 & Groundedness & Any natural-language answer about air quality shall be
+derived from the system's own forecast data through a tool call, never generated
+from a language model's parametric knowledge. \\
+NFR-6 & Honesty of framing & The what-if simulator shall be labelled explicitly
+as a model simulation and shall not be presented as causal evidence. \\
+NFR-7 & Reproducibility & Training shall be deterministic given the same data:
+random seeds fixed, subsampling seeded, and the split defined by time rather than
+by chance. \\
+NFR-8 & Resilience & A failure in an auxiliary capability - explanation,
+monitoring, forecast logging - shall be caught and logged and shall never
+prevent the primary forecast from being produced. \\
+NFR-9 & Auditability & Every model decision shall leave a durable record: the
+leaderboard for promotions and refusals, the evaluation report for accuracy, the
+monitoring report for drift and realised error. \\
+NFR-10 & Portability & The storage layer shall be addressed through one facade
+with interchangeable backends, so that the full pipeline can run locally on a
+platform where the managed client cannot be installed. \\
+NFR-11 & Graceful degradation & Where a capability requires a live backend, the
+interface shall hide it rather than presenting it broken, and shall fall back to
+committed data snapshots when no backend is configured. \\
+NFR-12 & Maintainability & The codebase shall be organised into single-responsibility
+modules with dependencies flowing in one direction, and the supported cities,
+paths and horizons shall be defined in exactly one place. \\
+NFR-13 & Usability & The interface shall communicate health status through the
+standard EPA colour scale and category names, shall be readable on a phone, and
+shall state when its data was generated. \\
+NFR-14 & Politeness to the data source & Requests shall be retried with backoff
+rather than repeated aggressively, historical windows shall be fetched in
+chunks, and data already held shall not be re-fetched. \\
+NFR-15 & Security & No credential shall appear in the repository; secrets shall
+be supplied through environment variables locally and through the
+continuous-integration secret store in automation. \\
+\end{xltabular}
+
+\section{Hardware and Software Requirements}
+Table~\ref{tab:platform} records the platforms and libraries the system depends
+on. The division between the development environment and the operating
+environment is significant: the feature-store client cannot be installed on the
+development platform at all, which is why the storage facade of NFR-10 exists.
+
+\begin{xltabular}{\textwidth}{P{3.2cm} P{3.4cm} Y}
+\caption{Hardware and software requirements.}\label{tab:platform}\\
+\toprule
+\bfseries Environment & \bfseries Component & \bfseries Requirement and purpose \\
+\midrule
+\endfirsthead
+\toprule
+\bfseries Environment & \bfseries Component & \bfseries Requirement and purpose \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+Development & Workstation & A conventional laptop; no GPU is required, since the
+production model is a gradient-boosted ensemble that trains on CPU in about a
+minute. \\
+Development & Python 3.11 & Pinned below 3.12 for dependency compatibility across
+the machine-learning stack. \\
+Development & Local Parquet store & Stands in for the feature store where the
+managed client cannot be installed. \\
+Automation & Linux runner & Ubuntu, Python 3.11, ephemeral; runs the hourly,
+daily and manual workflows and is the only environment in which the feature-store
+client is installed. \\
+Automation & Scheduler & Cron-triggered workflows with concurrency groups, so
+that two jobs never write to the feature store simultaneously. \\
+Managed state & Feature store and model registry & Free serverless tier; holds
+roughly 697,000 feature rows and the versioned champion bundles. \\
+Serving & Container host & A small always-on container running the API from a
+slim image; requires the OpenMP runtime for the gradient-boosting library. \\
+Serving & Static edge host & Serves the compiled frontend bundle; no server
+process. \\
+Libraries (data) & pandas, requests, pyarrow & Tabular processing, HTTP with
+retry, and columnar storage. \\
+Libraries (models) & scikit-learn, XGBoost, SHAP, TensorFlow & Baselines and
+metrics, the champion model, attributions, and the sequence-model study. \\
+Libraries (serving) & FastAPI, Uvicorn, Pydantic & Typed asynchronous HTTP
+interface with request validation. \\
+Libraries (frontend) & React, Vite, Recharts, react-leaflet & Application
+framework, build tooling, charting and cartography. \\
+Libraries (testing) & pytest & Unit tests over feature engineering, the index
+computation, the supervised builder and the promotion gate. \\
+\end{xltabular}
+
+\section{Requirements Traceability}
+Table~\ref{tab:trace} traces each gap identified in Chapter~\ref{ch:problem}
+through the requirements that address it to the chapter in which its realisation
+is documented and the means by which it is verified.
+
+\begin{xltabular}{\textwidth}{Q{1.0cm} P{3.3cm} P{2.6cm} Y}
+\caption{Requirements traceability matrix.}\label{tab:trace}\\
+\toprule
+\bfseries Gap & \bfseries Requirements & \bfseries Realised in & \bfseries Verified by \\
+\midrule
+\endfirsthead
+\toprule
+\bfseries Gap & \bfseries Requirements & \bfseries Realised in & \bfseries Verified by \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+G1 Nowcast only & FR-1, FR-4, FR-9, FR-23 & Sections
+\ref{sec:impl-feature-pipeline} and \ref{sec:impl-inference} & Live forecast
+documents containing 72 hourly points per city; endpoint checks. \\
+G2 Narrow coverage & FR-1, FR-2, FR-4 & Sections \ref{sec:design-data} and
+\ref{sec:design-mh} & 22 cities present in the feature store and in every
+published forecast. \\
+G3 Unreported accuracy & FR-5, FR-6, FR-7 & Section \ref{sec:impl-evaluate} &
+Per-horizon table, per-horizon baseline comparison and five-fold walk-forward
+backtest in Chapter~\ref{ch:testing}. \\
+G4 No uncertainty & FR-10 & Section \ref{sec:design-intervals} & Interval bounds
+present on every forecast point; band rendered in the interface. \\
+G5 No explanation & FR-13, FR-14, FR-15, FR-16 & Sections \ref{sec:impl-shap} and
+\ref{sec:impl-whatif} & Explanation object attached to each city's forecast;
+what-if endpoint returning baseline and scenario. \\
+G6 Silent decay & FR-3, FR-7, FR-8, FR-23 & Sections \ref{sec:impl-gate} and
+\ref{sec:impl-cicd} & Leaderboard showing a promotion, a further promotion and a
+refused tie; scheduled workflow history. \\
+G7 No observation & FR-17, FR-18 & Section \ref{sec:impl-monitoring} & Published
+PSI table with per-feature status; forecast log joined to observed values. \\
+\end{xltabular}
+
+\section{Summary of Requirement Analysis}
+This chapter set out how the requirements were elicited - from scenarios, from
+the data itself, from published operational practice and from observed failure -
+and identified the stakeholders and what each needs. It presented the use case
+model, whose defining feature is that the system's principal activity is
+initiated by a scheduler rather than by a person, and narrated seven use cases in
+full. It enumerated twenty-three functional and fifteen non-functional
+requirements, recorded the platforms and libraries the system depends on, and
+traced every gap from Chapter~\ref{ch:problem} through to its realisation and its
+verification. The next chapter presents the design that satisfies this
+specification.

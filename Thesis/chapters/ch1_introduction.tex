@@ -1,0 +1,399 @@
+\chapter{Introduction}
+\label{ch:intro}
+
+\section{Brief}
+Air pollution is the environmental risk factor that shortens the most lives, and
+South Asia carries a disproportionate share of that burden. In Pakistan, the
+winter months bring a persistent smog season in which the Air Quality Index (AQI)
+in the large cities of the Punjab plain routinely reaches values that public
+health agencies classify as unhealthy or worse for days at a time. The people
+most affected by it - children, the elderly, and anyone with a respiratory or
+cardiac condition - have very little information with which to protect
+themselves. What information does exist is almost invariably a \emph{nowcast}: a
+single number describing the air as it is at this moment, at one monitoring
+location, offered without explanation and without any statement of what the air
+will be like tomorrow.
+
+That is the wrong shape of information for the decisions people actually make.
+Whether to send a child to school on foot, whether to move an outdoor shift
+indoors, whether an asthmatic should carry a mask or reschedule an errand: these
+are decisions taken hours or days in advance, and they need a forecast, not a
+reading. A number that tells someone the air is dangerous \emph{now} arrives too
+late to be acted upon.
+
+This thesis presents the \projname, an end-to-end machine-learning system that
+forecasts the United States Environmental Protection Agency AQI up to 72 hours
+ahead for 22 cities spanning every province of Pakistan together with the
+Islamabad Capital Territory, Gilgit-Baltistan and Azad Jammu \& Kashmir. The
+system is not a model in a notebook. It ingests fresh observations every hour,
+retrains itself every night, refuses to deploy a new model that is not measurably
+better than the one already serving, explains every forecast it makes, watches
+its own inputs for distributional drift, scores its own past forecasts against
+the air quality that actually arrived, and serves all of this through a public
+web dashboard and a documented programming interface. It does all of this on free
+scheduled infrastructure, at an ongoing compute cost of effectively zero.
+Figure~\ref{fig:arch-intro} shows the system at a glance.
+
+\fig{architecture}{1.0}{High-level architecture of the \projname: three decoupled
+pipelines on a scheduled compute plane, communicating only through a managed
+feature store and model registry, with the results served by a container-hosted
+API and a static dashboard.}{fig:arch-intro}
+
+Figure~\ref{fig:arch-intro} divides the system into three regions. On the left, a
+single free and keyless data provider supplies both pollutant and weather
+observations, and also the weather \emph{forecast} that the inference stage needs.
+In the centre, a compute plane of scheduled, disposable jobs runs the three
+pipelines that give the architecture its name. On the right, a managed feature
+store and model registry hold every piece of durable state, so that no pipeline
+depends on any other pipeline still being alive. Beneath them, an application
+programming interface and a browser application deliver the result to the public.
+The remainder of this thesis develops each of these components in detail.
+
+\section{Relevance to Course Modules}
+The project is deliberately broad and exercises the core of a computer science
+and data science curriculum. Table~\ref{tab:relevance} maps the principal
+concepts the project applies to the areas in which they are taught.
+
+\begin{xltabular}{\textwidth}{Q{3.6cm} Y}
+\caption{Relevance of the project to the principal subject areas.}\label{tab:relevance}\\
+\toprule
+\bfseries Module / Area & \bfseries Concepts applied in this project \\
+\midrule
+\endfirsthead
+\toprule
+\bfseries Module / Area & \bfseries Concepts applied in this project \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+Machine Learning & Supervised regression, gradient-boosted trees, regularised
+linear models, bagged ensembles, hyper-parameter choice, bias-variance
+reasoning, baseline comparison. \\
+Time-Series Analysis & Autocorrelation, lag and rolling features, seasonality,
+cyclical encodings, direct multi-horizon forecasting, chronological validation,
+walk-forward backtesting, persistence baselines. \\
+Deep Learning & A recurrent (LSTM) sequence model trained and evaluated on the
+same task, and the reasoned decision not to promote it. \\
+Data Engineering & Ingestion from a public API with retry and backoff, chunked
+historical backfill, idempotent upserts, primary keys and event time, a feature
+store and feature views, and a backend-agnostic storage facade. \\
+Software Engineering & Layered package design, configuration as a single source
+of truth, dependency inversion at the storage boundary, unit testing, iterative
+lifecycle, and documentation. \\
+MLOps and DevOps & Scheduled pipelines, continuous integration, a model registry,
+champion-challenger promotion, artefact versioning, containerisation, and
+production deployment. \\
+Statistics & The Population Stability Index, empirical residual quantiles and
+split-conformal prediction intervals, correlation analysis, distributional
+comparison. \\
+Explainable AI & Shapley additive explanations, global and per-instance
+attribution, and the translation of attributions into natural language. \\
+Web Technologies & A typed asynchronous HTTP API, cross-origin policy, a
+single-page application, responsive charting, and interactive cartography. \\
+Human-Computer Interaction & Information hierarchy on a public dashboard,
+colour semantics for a standardised health scale, uncertainty communication, and
+graceful degradation when a capability is unavailable. \\
+\end{xltabular}
+
+\section{Project Background}
+Air-quality forecasting has three broad traditions. The first is
+\emph{deterministic chemical transport modelling}: physically simulating the
+emission, transport, chemistry and deposition of pollutants over a gridded
+domain. These models are the scientific gold standard and underpin national
+forecasting services, but they require an emissions inventory, meteorological
+boundary conditions and considerable computing capacity, none of which is
+available to an individual developer. The second is \emph{classical statistical
+time-series modelling}, in which an autoregressive or moving-average model is
+fitted to the pollutant series for a single site. Such models are cheap and
+interpretable, but they capture the persistence of the series rather than its
+drivers, and they degrade quickly beyond a short lead time because they cannot
+use a weather forecast. The third, and the one this project belongs to, is
+\emph{supervised machine learning}, in which a model learns the mapping from
+weather, calendar and recent pollution state to future pollutant concentration
+directly from historical data.
+
+The machine-learning approach has one decisive practical advantage for the
+problem at hand: the most informative predictors of tomorrow's air quality -
+tomorrow's wind, temperature, humidity and rainfall - are themselves available
+as a free public forecast. Air quality is, to a first approximation, a story
+about dispersion. Wind clears pollutants; a temperature inversion traps them
+under a warm lid; rain scavenges particulates out of the air column. If the
+weather for the next three days can be obtained at no cost, then a model that has
+learned how weather and pollution interact can produce a genuinely forward-looking
+forecast without any physical simulation at all.
+
+What the machine-learning approach does not solve by itself is the problem of
+\emph{staying} correct. A model trained on last year's data and left alone will
+decay, because the relationship it encodes is not stationary: seasons turn,
+emission patterns change, and the distribution of the inputs moves away from the
+distribution the model was fitted on. A great many student and research projects
+stop at a trained model and a reported accuracy figure. The interesting
+engineering problem - and the one this project treats as its centre of gravity
+- begins immediately afterwards. How does a model get retrained without a human
+present? How does one prevent a nightly retrain from silently shipping a worse
+model? How is the reigning model stored so that it survives the machine that
+trained it? How does the system notice that the world has changed? How does a
+user know why the system believes what it says? These are the questions of
+machine-learning operations, or MLOps, and they are what this thesis is
+principally about.
+
+\section{Motivation}
+Three observations motivated this project.
+
+The first is a matter of public health. Twenty-two cities, spanning every
+administrative unit of the country, are covered by this system; between them they
+are home to a very large share of Pakistan's urban population. A forecast with
+three days of lead time changes what a household can do with the information. It
+converts a warning into a plan. The exploratory analysis presented in
+Chapter~\ref{ch:design} shows exactly how large the effect being forecast is: the
+mean AQI across the whole record sits above 140 in five of the 22 cities
+studied, close to the threshold the EPA labels \emph{unhealthy}, and the
+seasonal signal is pronounced: January averages 146.8 against 91.5 in April,
+the cleanest month. This is not a marginal environmental nuisance; it is a recurring, seasonal,
+predictable public-health event, and predictability is precisely what a
+forecasting system can exploit.
+
+The second is a matter of engineering discipline. There is a large gap between a
+model that scores well on a held-out split and a system that keeps working
+unattended. Closing that gap normally implies infrastructure and therefore cost,
+which is why so much student work stops at the notebook. One goal of this project
+was to demonstrate that the entire lifecycle - scheduled ingestion, a feature
+store, automated retraining, a gated model registry, evaluation, drift monitoring
+and public deployment - can be assembled from free tiers and scheduled runners,
+and that doing so imposes real constraints which are themselves instructive. Some
+of the most valuable findings in this thesis, reported in
+Chapter~\ref{ch:impl}, came from failures induced by exactly those constraints:
+an insert that hung because a free-tier executor stalled, a statistics profiler
+that exhausted its memory on a 74-column table, and a deployment tool that
+silently omitted the model file because the repository ignored it.
+
+The third is a matter of trust. A forecast that cannot be interrogated is a
+forecast that will not be believed, particularly when it disagrees with what a
+person can see from their window. The system therefore never presents a bare
+number. Each forecast carries an 80\% prediction interval, so the user can see
+how confident the model is; each carries a plain-language explanation generated
+from the model's own Shapley attributions, so the user can see what is driving
+it; and the model's complete promotion history, per-horizon accuracy, backtest
+results and current drift status are all published in the same interface, so the
+claim of accuracy can be checked rather than merely asserted.
+
+\section{Problem Statement}
+Existing air-quality information for Pakistan is current-only, sparse,
+unexplained and manually maintained, and the machine-learning work that addresses
+it typically stops short of an operating system. Official and commercial sources
+report the AQI as it stands at a monitoring station, which tells a user what has
+already happened rather than what is about to; where a forecast is offered it
+generally covers a single major city, so residents of the smaller cities in
+Khyber Pakhtunkhwa, Balochistan, Gilgit-Baltistan and Azad Jammu \& Kashmir are
+served by nothing at all. No mainstream source explains its number, so a user
+cannot distinguish a reading driven by a genuine pollution episode from one
+driven by an unusual meteorological configuration, and none publishes its own
+error, so its reliability cannot be assessed.
+
+The research literature closes part of this gap and leaves the rest open.
+Supervised models for pollutant forecasting are well established, and
+gradient-boosted trees in particular are repeatedly found competitive with, or
+superior to, deep sequence models on tabular, weather-driven environmental data.
+What is far less commonly addressed is the operational half of the problem. A
+published accuracy figure is usually computed on a single held-out split and
+reported as one average number, which conceals the fact that error grows steeply
+with lead time and thereby overstates usefulness at the horizons a user actually
+cares about. Retraining, if discussed at all, is assumed rather than implemented;
+promotion is unguarded, so a scheduled retrain can degrade a service without
+anyone noticing; the trained artefact is left on the machine that produced it,
+which in a serverless setting means it is destroyed minutes later; and drift,
+which is the specific mechanism by which such a system decays, is rarely
+instrumented.
+
+There is therefore a need for a system that forecasts AQI several days ahead for
+many cities rather than one; that reports its accuracy honestly, per horizon and
+under rolling validation rather than a single split; that retrains itself without
+human intervention while refusing to promote a model that is not demonstrably
+better; that stores its champion durably and independently of any single machine;
+that quantifies its own uncertainty and watches its own inputs and outputs for
+decay; that explains each individual prediction in language a non-specialist can
+act on; and that delivers all of this to the public reliably and at negligible
+cost. A fuller treatment of the problem, of the shortcomings of current systems
+and of the specific gaps this project addresses is given in
+Chapter~\ref{ch:problem}.
+
+\section{Aims and Objectives}
+The overarching aim of the project is to design, implement, deploy and evaluate a
+serverless, self-monitoring machine-learning system that forecasts the Air
+Quality Index three days ahead for 22 Pakistani cities and explains its
+predictions. This aim is decomposed into the following objectives.
+
+\begin{enumerate}
+  \item \textbf{Data and features.} To ingest weather and pollutant observations
+  automatically from a free public source, and to engineer from them a rich but
+  strictly leakage-controlled feature representation that generalises across many
+  cities rather than being fitted to one.
+  \item \textbf{Serverless pipeline architecture.} To realise the system as three
+  decoupled Feature, Training and Inference pipelines, orchestrated by a free
+  scheduler and communicating only through a managed feature store and model
+  registry, so that each may run, fail and be replaced independently.
+  \item \textbf{Accurate multi-horizon forecasting.} To train a single global
+  model that serves every lead time from one hour to 72 hours by treating the
+  horizon as an input feature, to measure it against a persistence baseline at
+  every horizon rather than only on average, and to attach calibrated prediction
+  intervals to every forecast it produces.
+  \item \textbf{MLOps discipline.} To implement a champion-challenger promotion
+  gate backed by a persistent leaderboard and a durable versioned model registry,
+  and to evaluate the model rigorously through per-horizon metrics and
+  walk-forward backtesting rather than a single averaged score.
+  \item \textbf{A trust layer.} To explain each forecast through Shapley
+  attributions rendered as plain language, to allow a user to interrogate the
+  model through a what-if simulator, and to monitor the system continuously for
+  input drift and realised forecast error.
+  \item \textbf{Delivery.} To serve the whole system publicly through a typed
+  HTTP interface and an interactive dashboard, and to expose the same grounded
+  data to a language-model advisor through a standard tool protocol.
+\end{enumerate}
+
+\section{Scope of the Project}
+The project delivers a complete, running system. In scope are: hourly ingestion
+and feature engineering for 22 cities; a full historical backfill from January
+2023 to the present; exploratory analysis of the resulting dataset; a daily
+training pipeline comparing four model families; a global multi-horizon
+forecaster covering lead times from one to 72 hours; empirical prediction
+intervals; a feature store and a model registry; champion-challenger promotion
+with a persistent leaderboard; per-horizon evaluation and walk-forward
+backtesting; Shapley-based explanation in natural language; a what-if simulator;
+drift and forecast-error monitoring; hazard alerting; a FastAPI backend; a React
+dashboard; a Model Context Protocol server and a language-model advisor; and live
+public deployment of the whole.
+
+The following are explicitly out of scope. The project does not train a bespoke
+foundation model or perform physical chemical-transport simulation; it uses a
+hosted language model through its API for the advisor and a free public data
+service for its observations. It does not attempt street-level or sub-hourly
+resolution: the finest granularity of the data source, and therefore of the
+system, is one city and one hour. It does not guarantee accuracy during
+unprecedented events - an uncontrolled industrial fire, for example - that have
+no analogue in the training record. It does not offer a mobile application, and
+it does not use any paid data source. Finally, the system forecasts the AQI; it
+does not attribute pollution to sources, and the what-if simulator is
+explicitly presented as a model simulation rather than a causal claim.
+
+\section{Methodology and Software Lifecycle}
+The project followed an iterative and incremental lifecycle, organised as a
+sequence of modules, and illustrated in Figure~\ref{fig:sdlc}. Each iteration
+delivered one independently runnable and independently testable capability, and
+each was allowed to inform the plan for the next. This was not merely a
+convenient way to organise the work; it was the only defensible one, because the
+behaviour of several components could be established only empirically. Whether a
+free-tier feature store could absorb a three-and-a-half-year backfill for 22
+cities, whether a sequence model would beat a tree ensemble on this data, and
+whether a nightly retrain would in fact produce an improvement rather than noise
+were all questions that had to be answered by running the thing rather than by
+reasoning about it in advance.
+
+\fig{sdlc}{0.72}{The iterative, module-by-module lifecycle followed during
+development. Each iteration delivers one working, testable increment, and each
+observed failure feeds directly into the next iteration's plan.}{fig:sdlc}
+
+\subsection{Planning}
+Each iteration began by selecting the next module and identifying its principal
+risk. Risk drove ordering: the historical backfill, which depended on an external
+free-tier service absorbing hundreds of thousands of rows, was attempted early
+precisely because a failure there would have invalidated the architecture.
+
+\subsection{Analysis}
+Requirements for the increment were expressed as concrete scenarios - ``a
+resident of Multan wants to know whether Thursday afternoon is safe for a child's
+football practice'' - and reduced to functional and non-functional requirements,
+which Chapter~\ref{ch:requirements} sets out in full.
+
+\subsection{Design}
+Interfaces were fixed before code was written, with particular care at the two
+boundaries that determine whether the architecture holds: the contract between a
+pipeline and the feature store, and the contract between a training run and the
+model registry. Chapter~\ref{ch:design} documents these.
+
+\subsection{Implementation}
+Each module was implemented as a small, separately importable Python module with
+one responsibility, so that ingestion, feature construction, training,
+evaluation, explanation, monitoring and serving could each evolve without
+disturbing the others. Chapter~\ref{ch:impl} presents the implementation.
+
+\subsection{Testing and Integration}
+Each increment was covered by unit tests over its critical logic - most
+importantly the tests that assert the absence of target leakage - and then run
+end to end against live data on a scheduled runner before being considered
+complete. Chapter~\ref{ch:testing} reports the results.
+
+\subsection{Maintenance}
+Between iterations, the system was hardened in response to observed failures.
+The backfill gained non-blocking writes and a history-aware resume after it froze
+partway through a run; the training pipeline gained an explicit datetime
+coercion after the feature store returned its event-time column as strings; and
+the deployment gained explicit negations in the ignore file after the deployment
+tool silently omitted the model bundle.
+
+\subsection{System Development Lifecycle Summary}
+The iterative approach suited a project whose central components could only be
+judged by measurement. Each shortcoming observed in a real run became the first
+item of the next iteration's plan, which produced steady and demonstrable
+improvement - most visibly in the model itself, whose first champion was
+promoted at a validation RMSE of 20.60 and then displaced by a better one at
+19.69 once the full historical record was available.
+
+\section{The Feature-Training-Inference Pattern in Brief}
+The architectural backbone of the system is the Feature-Training-Inference
+pattern, shown in Figure~\ref{fig:fti-intro}. Rather than a single program that
+loads data, trains a model and predicts, the work is divided into three pipelines
+that never call one another. The feature pipeline turns raw observations into
+features and writes them to a feature store. The training pipeline reads
+features from that store, produces a model and writes it to a model registry. The
+inference pipeline reads the model from that registry and produces forecasts.
+Each runs on its own schedule; each can fail, be re-run or be rewritten without
+the others being aware of it; and the store and the registry are the only
+contract between them.
+
+\fig{fti-pipelines}{1.0}{The three decoupled pipelines, their schedules and the
+shared state through which they communicate.}{fig:fti-intro}
+
+This decoupling is what makes a serverless implementation possible. Because the
+only durable state lives in the feature store and the model registry, the compute
+itself can be entirely disposable: every pipeline runs on an ephemeral runner
+that is destroyed when the job finishes, and nothing of value is lost when it is.
+
+\section{Significance of the Project}
+The significance of this work is threefold. \emph{Practically}, it puts a
+three-day, explained, uncertainty-quantified air-quality forecast into the hands
+of residents of 22 Pakistani cities, most of which are served by no forecast at
+all, and it does so at a running cost that is effectively zero - which matters,
+because a public-interest service that is expensive to run is a service that
+stops running. \emph{Technically}, it demonstrates that the full MLOps lifecycle
+- feature store, scheduled retraining, gated promotion, durable registry,
+rigorous evaluation and self-monitoring - can be implemented in its entirety on
+free infrastructure, and it documents the concrete constraints that such
+infrastructure imposes and how each was overcome. \emph{Academically}, it
+provides a fully documented reference design for an operational forecasting
+system, including the components that are most often omitted from published work:
+the promotion gate, the per-horizon and walk-forward evaluation that reveals how
+skill actually decays with lead time, and the drift and realised-error monitoring
+that tells an operator when the system has stopped being trustworthy.
+
+\section{Thesis Organisation}
+The remainder of this thesis is organised as follows.
+Chapter~\ref{ch:literature} reviews related work in air-quality forecasting,
+feature stores and the Feature-Training-Inference pattern, MLOps practice,
+explainable machine learning and time-series validation.
+Chapter~\ref{ch:problem} defines the problem and the gaps in existing systems.
+Chapter~\ref{ch:requirements} presents the requirement analysis.
+Chapter~\ref{ch:design} details the system design and architecture, and
+Chapter~\ref{ch:impl} its implementation. Chapter~\ref{ch:ui} describes the user
+interface. Chapter~\ref{ch:testing} reports the testing and the empirical
+evaluation. Chapter~\ref{ch:conclusion} concludes and outlines future work, and
+Chapter~\ref{ch:glossary} collects the abbreviations and glossary, followed by
+the references.
+
+\section{Summary of Introduction}
+This chapter introduced the \projname\ and motivated it against the current state
+of air-quality information in Pakistan, which is a nowcast for a few cities
+rather than a forecast for many. It stated the problem, set out the aims,
+objectives and scope, described the iterative methodology by which the system was
+built, and previewed the Feature-Training-Inference pattern that gives the
+architecture its shape. The next chapter surveys the body of work on which the
+project builds.

@@ -1,0 +1,121 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="_style.css"></head>
+<body><div id="canvas">
+<svg width="1200" height="740" viewBox="0 0 1200 740">
+  <defs>
+    <marker id="ar" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#2C6FB5"/></marker>
+    <marker id="arT" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#2E8B8B"/></marker>
+    <marker id="arA" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#C8881A"/></marker>
+    <linearGradient id="hdr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#264a73"/><stop offset="1" stop-color="#1F3A5F"/></linearGradient>
+  </defs>
+
+  <text x="600" y="32" text-anchor="middle" class="t-title">Pearls AQI Predictor - Serverless Feature-Training-Inference Architecture</text>
+
+  <!-- SOURCE -->
+  <rect x="24" y="120" width="180" height="150" rx="12" fill="#FBEEDF" stroke="#C8881A" stroke-width="2"/>
+  <text x="114" y="150" text-anchor="middle" class="t-h" fill="#8a5e12">Open-Meteo</text>
+  <text x="114" y="176" text-anchor="middle" class="t-s">Air-Quality API</text>
+  <text x="114" y="195" text-anchor="middle" class="t-s">Archive / Forecast API</text>
+  <text x="114" y="222" text-anchor="middle" class="t-s">free &#183; keyless &#183; hourly</text>
+  <text x="114" y="244" text-anchor="middle" class="t-s">7 pollutants +</text>
+  <text x="114" y="262" text-anchor="middle" class="t-s">10 weather variables</text>
+
+  <!-- COMPUTE PLANE -->
+  <rect x="244" y="64" width="472" height="376" rx="14" fill="#F7FAFD" stroke="#1F3A5F" stroke-width="2"/>
+  <rect x="244" y="64" width="472" height="34" rx="14" fill="url(#hdr)"/>
+  <rect x="244" y="82" width="472" height="16" fill="#1F3A5F"/>
+  <text x="480" y="87" text-anchor="middle" class="t-h" style="fill:#fff">Compute Plane &#160;&#183;&#160; GitHub Actions (scheduled, ephemeral)</text>
+
+  <rect x="266" y="112" width="428" height="62" rx="9" fill="#EEF4FA" stroke="#2C6FB5"/>
+  <text x="480" y="136" text-anchor="middle" class="t-h">1 &#183; Feature Pipeline</text>
+  <text x="480" y="158" text-anchor="middle" class="t-s">hourly &#183; fetch &#8594; engineer &#8594; upsert, 22 cities</text>
+
+  <rect x="266" y="186" width="428" height="62" rx="9" fill="#EEF4FA" stroke="#2C6FB5"/>
+  <text x="480" y="210" text-anchor="middle" class="t-h">2 &#183; Training Pipeline</text>
+  <text x="480" y="232" text-anchor="middle" class="t-s">daily &#183; supervised set &#8594; 4 candidates &#8594; promotion gate</text>
+
+  <rect x="266" y="260" width="428" height="62" rx="9" fill="#EEF4FA" stroke="#2C6FB5"/>
+  <text x="480" y="284" text-anchor="middle" class="t-h">3 &#183; Inference Pipeline</text>
+  <text x="480" y="306" text-anchor="middle" class="t-s">batch &#183; champion &#8594; 72 h curve, intervals, SHAP</text>
+
+  <rect x="266" y="336" width="206" height="54" rx="9" fill="#FFFFFF" stroke="#B9C6D6" stroke-dasharray="4 3"/>
+  <text x="369" y="358" text-anchor="middle" class="t-b">Backfill (one-off)</text>
+  <text x="369" y="378" text-anchor="middle" class="t-s">2023-01 &#8594; now, chunked</text>
+
+  <rect x="488" y="336" width="206" height="54" rx="9" fill="#FFFFFF" stroke="#B9C6D6" stroke-dasharray="4 3"/>
+  <text x="591" y="358" text-anchor="middle" class="t-b">Evaluate + Monitor</text>
+  <text x="591" y="378" text-anchor="middle" class="t-s">per-horizon &#183; backtest &#183; PSI</text>
+
+  <text x="480" y="420" text-anchor="middle" class="t-s">Runners are stateless: every durable artefact leaves the runner before it dies.</text>
+
+  <!-- STATE PLANE -->
+  <rect x="756" y="64" width="420" height="376" rx="14" fill="#F7FAFD" stroke="#2E8B8B" stroke-width="2"/>
+  <rect x="756" y="64" width="420" height="34" rx="14" fill="#256f6f"/>
+  <rect x="756" y="82" width="420" height="16" fill="#256f6f"/>
+  <text x="966" y="87" text-anchor="middle" class="t-h" style="fill:#fff">State Plane &#160;&#183;&#160; Hopsworks Serverless (free tier)</text>
+
+  <rect x="780" y="116" width="372" height="126" rx="9" fill="#E6F2EC" stroke="#2E7D52"/>
+  <text x="966" y="144" text-anchor="middle" class="t-h">Feature Store</text>
+  <text x="966" y="168" text-anchor="middle" class="t-s">feature group &#160;aqi_features&#160; v2</text>
+  <text x="966" y="188" text-anchor="middle" class="t-s">primary key (city, timestamp) &#183; event time datetime</text>
+  <text x="966" y="208" text-anchor="middle" class="t-s">HUDI time travel &#183; idempotent upserts</text>
+  <text x="966" y="228" text-anchor="middle" class="t-s">&#8776; 697,000 hourly rows &#215; 74 columns</text>
+
+  <rect x="780" y="258" width="372" height="112" rx="9" fill="#E6F2EC" stroke="#2E7D52"/>
+  <text x="966" y="286" text-anchor="middle" class="t-h">Model Registry</text>
+  <text x="966" y="310" text-anchor="middle" class="t-s">aqi_global_forecaster</text>
+  <text x="966" y="330" text-anchor="middle" class="t-s">versioned bundles tagged with RMSE / MAE / R&#178;</text>
+  <text x="966" y="350" text-anchor="middle" class="t-s">champion = the version with the lowest RMSE</text>
+
+  <text x="966" y="398" text-anchor="middle" class="t-s">The only contract between the three pipelines.</text>
+  <text x="966" y="418" text-anchor="middle" class="t-s">They never call one another directly.</text>
+
+  <!-- SERVING -->
+  <rect x="244" y="492" width="326" height="128" rx="12" fill="#EEF4FA" stroke="#2C6FB5" stroke-width="2"/>
+  <text x="407" y="520" text-anchor="middle" class="t-h">FastAPI Backend</text>
+  <text x="407" y="544" text-anchor="middle" class="t-s">Docker image on Railway &#183; Uvicorn</text>
+  <text x="407" y="564" text-anchor="middle" class="t-s">forecasts &#183; leaderboard &#183; evaluation</text>
+  <text x="407" y="584" text-anchor="middle" class="t-s">monitoring &#183; explain &#183; what-if &#183; chat</text>
+  <text x="407" y="606" text-anchor="middle" class="t-s">serves committed JSON + model bundle</text>
+
+  <rect x="614" y="492" width="326" height="128" rx="12" fill="#EEF4FA" stroke="#2C6FB5" stroke-width="2"/>
+  <text x="777" y="520" text-anchor="middle" class="t-h">React Dashboard</text>
+  <text x="777" y="544" text-anchor="middle" class="t-s">Vite build on Vercel &#183; Aurora design</text>
+  <text x="777" y="564" text-anchor="middle" class="t-s">Forecast &#183; Model Evaluation</text>
+  <text x="777" y="584" text-anchor="middle" class="t-s">Monitoring &#183; What-If</text>
+  <text x="777" y="606" text-anchor="middle" class="t-s">Recharts &#183; react-leaflet map</text>
+
+  <rect x="984" y="492" width="192" height="128" rx="12" fill="#FBEEDF" stroke="#C8881A" stroke-width="2"/>
+  <text x="1080" y="520" text-anchor="middle" class="t-h" fill="#8a5e12">MCP Server</text>
+  <text x="1080" y="544" text-anchor="middle" class="t-s">and LLM advisor</text>
+  <text x="1080" y="570" text-anchor="middle" class="t-s">four grounded tools</text>
+  <text x="1080" y="590" text-anchor="middle" class="t-s">over the same</text>
+  <text x="1080" y="610" text-anchor="middle" class="t-s">forecast data</text>
+
+  <rect x="244" y="660" width="696" height="56" rx="12" fill="#1F3A5F"/>
+  <text x="592" y="684" text-anchor="middle" class="t-h" style="fill:#fff">Public users - 22 cities across Pakistan</text>
+  <text x="592" y="706" text-anchor="middle" class="t-s" style="fill:#cdd9e8">current AQI &#183; 72-hour forecast with 80% interval &#183; explanation &#183; alerts</text>
+
+  <!-- EDGES -->
+  <path d="M204,180 L260,180" stroke="#C8881A" stroke-width="2.6" fill="none" marker-end="url(#arA)"/>
+  <path d="M204,250 C232,250 232,292 260,292" stroke="#C8881A" stroke-width="2.2" fill="none" marker-end="url(#arA)" stroke-dasharray="5 4"/>
+  <text x="112" y="300" text-anchor="middle" class="t-s">forecast weather</text>
+  <text x="112" y="318" text-anchor="middle" class="t-s">for inference</text>
+
+  <path d="M694,140 L774,140" stroke="#2E8B8B" stroke-width="2.6" fill="none" marker-end="url(#arT)"/>
+  <text x="734" y="130" text-anchor="middle" class="t-s">write</text>
+  <path d="M774,206 L698,206" stroke="#2E8B8B" stroke-width="2.6" fill="none" marker-end="url(#arT)"/>
+  <text x="736" y="197" text-anchor="middle" class="t-s">read</text>
+  <path d="M694,234 C730,234 744,272 774,278" stroke="#2E8B8B" stroke-width="2.6" fill="none" marker-end="url(#arT)"/>
+  <text x="752" y="244" text-anchor="middle" class="t-s">register</text>
+  <path d="M774,306 C740,312 726,300 698,296" stroke="#2E8B8B" stroke-width="2.6" fill="none" marker-end="url(#arT)"/>
+  <text x="736" y="326" text-anchor="middle" class="t-s">load champion</text>
+
+  <path d="M407,444 L407,486" stroke="#2C6FB5" stroke-width="2.6" fill="none" marker-end="url(#ar)"/>
+  <text x="419" y="468" class="t-s">predictions.json + evaluation.json + monitoring.json committed to the repository</text>
+  <path d="M570,554 L608,554" stroke="#2C6FB5" stroke-width="2.6" fill="none" marker-end="url(#ar)"/>
+  <text x="589" y="544" text-anchor="middle" class="t-s">HTTPS</text>
+  <path d="M940,554 L978,554" stroke="#2C6FB5" stroke-width="2.6" fill="none" marker-end="url(#ar)"/>
+  <path d="M777,620 L777,654" stroke="#2C6FB5" stroke-width="2.6" fill="none" marker-end="url(#ar)"/>
+  <path d="M407,620 L407,654" stroke="#2C6FB5" stroke-width="2.6" fill="none" marker-end="url(#ar)"/>
+</svg>
+</div></body></html>

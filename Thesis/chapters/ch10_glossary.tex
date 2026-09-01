@@ -1,0 +1,164 @@
+\chapter{Abbreviations and Glossary}
+\label{ch:glossary}
+
+\section{Abbreviations}
+The abbreviations and acronyms used throughout this thesis are collected in
+Table~\ref{tab:abbr}, listed alphabetically with their full forms. They span the
+air-quality, statistical, machine-learning and software concepts on which the
+project draws.
+
+\begin{xltabular}{\textwidth}{B Y}
+\caption{List of abbreviations.}\label{tab:abbr}\\
+\toprule
+\bfseries Abbreviation & \bfseries Meaning \\
+\midrule
+\endfirsthead
+\toprule
+\bfseries Abbreviation & \bfseries Meaning \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+AJK & Azad Jammu \& Kashmir \\
+API & Application Programming Interface \\
+AQI & Air Quality Index \\
+ARIMA & Autoregressive Integrated Moving Average \\
+CAMS & Copernicus Atmosphere Monitoring Service \\
+CI/CD & Continuous Integration and Continuous Deployment \\
+CO & Carbon Monoxide \\
+CORS & Cross-Origin Resource Sharing \\
+CPU & Central Processing Unit \\
+CSS & Cascading Style Sheets \\
+EPA & (United States) Environmental Protection Agency \\
+ERA5 & The fifth-generation ECMWF atmospheric reanalysis \\
+FR & Functional Requirement \\
+FTI & Feature-Training-Inference (the pipeline architecture pattern) \\
+GB & Gilgit-Baltistan \\
+GPU & Graphics Processing Unit \\
+HTTP(S) & HyperText Transfer Protocol (Secure) \\
+HUDI & Hadoop Upserts, Deletes and Incrementals (a time-travel table format) \\
+ICT & Islamabad Capital Territory \\
+JSON & JavaScript Object Notation \\
+LLM & Large Language Model \\
+LSTM & Long Short-Term Memory (a recurrent neural network architecture) \\
+MAE & Mean Absolute Error \\
+MCP & Model Context Protocol \\
+ML & Machine Learning \\
+MLOps & Machine-Learning Operations \\
+NFR & Non-Functional Requirement \\
+NO\textsubscript{2} & Nitrogen Dioxide \\
+O\textsubscript{3} & Ozone \\
+OpenMP & Open Multi-Processing (the shared-memory parallelism runtime) \\
+PM\textsubscript{2.5} & Particulate Matter of diameter 2.5 micrometres or less \\
+PM\textsubscript{10} & Particulate Matter of diameter 10 micrometres or less \\
+PSI & Population Stability Index \\
+$R^2$ & Coefficient of Determination \\
+RMSE & Root Mean Squared Error \\
+SDLC & Software Development Life Cycle \\
+SHAP & SHapley Additive exPlanations \\
+SO\textsubscript{2} & Sulphur Dioxide \\
+SPA & Single-Page Application \\
+TC & Test Case \\
+UC & Use Case \\
+UI & User Interface \\
+URL & Uniform Resource Locator \\
+UTC & Coordinated Universal Time \\
+WHO & World Health Organization \\
+XGBoost & Extreme Gradient Boosting \\
+\end{xltabular}
+
+\section{Glossary}
+\begin{description}[style=nextline,leftmargin=1.5em,labelsep=0pt,itemsep=5pt]
+  \item[Air Quality Index] A dimensionless public-health index computed from
+  pollutant concentrations by piecewise-linear interpolation, reported as the
+  maximum of the per-pollutant sub-indices and divided into six named health
+  categories.
+  \item[Anchor state] The observed pollution conditions at the moment a forecast
+  is issued - the current index, its recent means and volatility, and the current
+  particulate concentrations - supplied to the model as the state from which the
+  forecast departs.
+  \item[Backfill] The one-off pipeline run that loads the full multi-year history
+  into the feature store, in chunks, resumably, so that a model can be trained on
+  more than the few days the hourly pipeline has accumulated.
+  \item[Baseline (persistence)] The naive forecast that the value $h$ hours ahead
+  equals the value now. Scored in every training run as the reference against
+  which any claim of forecasting skill must be made.
+  \item[Challenger] The best fitted candidate produced by a training run, which
+  becomes the champion only if it improves on the incumbent's validation error.
+  \item[Champion] The model currently in service. Defined operationally as the
+  registered version with the lowest recorded validation RMSE.
+  \item[Champion-challenger gate] The rule that a newly trained model may replace
+  the model in service only on a measured improvement, so that an unattended
+  retrain cannot degrade the system.
+  \item[Chronological split] Dividing training from validation by time rather than
+  at random, so that the model is always evaluated on a period it has not seen.
+  \item[Conformal prediction] A distribution-free framework for attaching
+  prediction intervals to an arbitrary regressor; in its split form, the interval
+  is built from the empirical quantiles of residuals on a held-out calibration
+  set.
+  \item[Cyclical encoding] Representing a periodic quantity such as the hour of
+  the day by its sine and cosine, so that the last value of the cycle is adjacent
+  to the first rather than maximally distant from it.
+  \item[Direct multi-horizon forecasting] Predicting the value at $t+h$ directly,
+  rather than applying a one-step model repeatedly to its own output, thereby
+  avoiding the accumulation of error across steps.
+  \item[Drift] A change over time in the distribution of a model's inputs, or in
+  the relationship between inputs and target. For a seasonal system, recurring
+  drift is the normal condition rather than a fault.
+  \item[Ephemeral runner] A scheduled compute instance that is created for one job
+  and destroyed when it ends, so that nothing written to its local disk survives.
+  \item[Event time] The column recording when an observation actually occurred, as
+  distinct from when it was written; used by the feature store to order and
+  time-travel over rows.
+  \item[Feature group] The versioned, schema-defined table in the feature store
+  into which the feature pipeline writes and from which the training pipeline
+  reads.
+  \item[Feature store] A managed repository of engineered features with primary
+  keys and event time, written by feature pipelines and read by both training and
+  inference, which eliminates training-serving skew by construction.
+  \item[Feature-Training-Inference (FTI)] The architectural pattern in which a
+  machine-learning system is expressed as three pipelines that share no code path
+  and communicate only through a feature store and a model registry.
+  \item[Global model] A single model trained across all locations and all
+  horizons, conditioned on location and horizon as features, rather than one model
+  per location or per horizon.
+  \item[Horizon] The forecast lead time in hours. In this system it is an input
+  feature, which is what allows one model to serve every lead time.
+  \item[Idempotent upsert] A write that inserts a row if its key is new and
+  replaces it if the key already exists, so that repeating the write has no
+  additional effect and re-running a pipeline is always safe.
+  \item[Leaderboard] The persistent record of every training run, its candidates,
+  its metrics and its promotion decision, serving as the audit trail of the
+  system's model history.
+  \item[Model registry] The durable, versioned store of trained model artefacts
+  tagged with their metrics, from which the inference pipeline retrieves the
+  champion; the mechanism by which a model outlives the machine that trained it.
+  \item[Population Stability Index] A non-parametric measure of how far a current
+  distribution has moved from a reference distribution, computed over shared bins;
+  conventionally read as stable below 0.10, moderate to 0.25, and significant
+  above.
+  \item[Prediction interval] A range around a point forecast expected to contain
+  the true value with a stated probability; here the tenth to ninetieth residual
+  percentiles for the relevant horizon, giving a nominal 80\% interval.
+  \item[Serverless] An architecture in which no long-running server is
+  provisioned; compute is scheduled, short-lived and disposable, and all durable
+  state lives in managed services.
+  \item[Shapley value] The unique attribution of a prediction among its input
+  features that satisfies local accuracy, missingness and consistency; computable
+  exactly and in polynomial time for tree ensembles.
+  \item[Target leakage] The presence in a feature of information that would not
+  have been available at prediction time, which inflates measured accuracy and
+  destroys real-world performance.
+  \item[Target-time features] The inputs describing the hour being forecast -
+  forecast weather, deterministic calendar and fixed location - as distinct from
+  the anchor state describing the moment the forecast is issued.
+  \item[Training-serving skew] The failure mode in which features are computed
+  differently for training and for inference, so that a model performs worse in
+  production than in evaluation for reasons unrelated to the data.
+  \item[Walk-forward backtest] Rolling validation in which the training window
+  expands and the test window moves forward with it, so that every evaluation is
+  made on the future of its own training data.
+  \item[What-if simulation] Re-predicting under deliberately altered inputs to
+  observe how the model responds; a statement about the model, not a causal claim
+  about the world.
+\end{description}

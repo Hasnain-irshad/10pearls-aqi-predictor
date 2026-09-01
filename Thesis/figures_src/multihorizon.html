@@ -1,0 +1,80 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="_style.css"></head>
+<body><div id="canvas">
+<svg width="1080" height="620" viewBox="0 0 1080 620">
+  <defs>
+    <marker id="a" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#2C6FB5"/></marker>
+    <marker id="t" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#2E8B8B"/></marker>
+  </defs>
+
+  <text x="540" y="32" text-anchor="middle" class="t-title">Direct Multi-Horizon Forecasting: the Horizon Is a Feature</text>
+
+  <!-- left: the naive alternative -->
+  <rect x="24" y="66" width="300" height="228" rx="12" fill="#F4E9EC" stroke="#B5485B" stroke-width="1.8"/>
+  <text x="174" y="94" text-anchor="middle" class="t-h" fill="#8d3444">The alternative that was rejected</text>
+  <text x="174" y="120" text-anchor="middle" class="t-s">One separate model per lead time</text>
+  <rect x="52" y="136" width="110" height="34" rx="6" fill="#fff" stroke="#B9C6D6"/><text x="107" y="158" text-anchor="middle" class="t-s">model for +1 h</text>
+  <rect x="186" y="136" width="110" height="34" rx="6" fill="#fff" stroke="#B9C6D6"/><text x="241" y="158" text-anchor="middle" class="t-s">model for +2 h</text>
+  <rect x="52" y="178" width="110" height="34" rx="6" fill="#fff" stroke="#B9C6D6"/><text x="107" y="200" text-anchor="middle" class="t-s">model for +3 h</text>
+  <rect x="186" y="178" width="110" height="34" rx="6" fill="#fff" stroke="#B9C6D6"/><text x="241" y="200" text-anchor="middle" class="t-s">&#8230; up to +72 h</text>
+  <text x="174" y="240" text-anchor="middle" class="t-s">72 artefacts to train, version,</text>
+  <text x="174" y="258" text-anchor="middle" class="t-s">register, monitor and explain -</text>
+  <text x="174" y="276" text-anchor="middle" class="t-s">and no sharing of what they learn.</text>
+
+  <!-- right: adopted design -->
+  <rect x="372" y="66" width="684" height="228" rx="12" fill="#EEF4FA" stroke="#2C6FB5" stroke-width="2"/>
+  <text x="714" y="94" text-anchor="middle" class="t-h">The design adopted: one global model</text>
+
+  <rect x="396" y="112" width="212" height="160" rx="9" fill="#fff" stroke="#B9C6D6"/>
+  <text x="502" y="136" text-anchor="middle" class="t-b">Model input</text>
+  <text x="410" y="160" class="t-s">20 target-time features at t + h</text>
+  <text x="410" y="182" class="t-s">6 anchor-state features at t</text>
+  <text x="410" y="204" class="t-s">1 horizon value h</text>
+  <line x1="410" y1="218" x2="596" y2="218" stroke="#B9C6D6"/>
+  <text x="410" y="240" class="t-b">27 inputs in total</text>
+  <text x="410" y="260" class="t-s">identical for every city and lead time</text>
+
+  <rect x="646" y="140" width="164" height="104" rx="9" fill="#1F3A5F"/>
+  <text x="728" y="180" text-anchor="middle" class="t-h" style="fill:#fff">One XGBoost</text>
+  <text x="728" y="202" text-anchor="middle" class="t-h" style="fill:#fff">regressor</text>
+  <text x="728" y="226" text-anchor="middle" class="t-s" style="fill:#cdd9e8">trained on 200,000 rows</text>
+
+  <rect x="850" y="112" width="186" height="160" rx="9" fill="#E6F2EC" stroke="#2E7D52"/>
+  <text x="943" y="136" text-anchor="middle" class="t-b">Output</text>
+  <text x="943" y="162" text-anchor="middle" class="t-s">predicted AQI at t + h</text>
+  <text x="943" y="188" text-anchor="middle" class="t-s">plus the residual-quantile</text>
+  <text x="943" y="206" text-anchor="middle" class="t-s">interval for that horizon</text>
+  <text x="943" y="238" text-anchor="middle" class="t-s">called 72 times to draw</text>
+  <text x="943" y="256" text-anchor="middle" class="t-s">a whole forecast curve</text>
+
+  <path d="M610,192 L640,192" stroke="#2C6FB5" stroke-width="2.6" fill="none" marker-end="url(#a)"/>
+  <path d="M812,192 L844,192" stroke="#2C6FB5" stroke-width="2.6" fill="none" marker-end="url(#a)"/>
+
+  <!-- training-set construction -->
+  <text x="540" y="342" text-anchor="middle" class="t-h">How one hourly series becomes ten supervised rows</text>
+
+  <rect x="120" y="366" width="840" height="120" rx="10" fill="#F7FAFD" stroke="#B9C6D6"/>
+  <line x1="160" y1="440" x2="920" y2="440" stroke="#5C6B7A" stroke-width="1.6"/>
+  <circle cx="240" cy="440" r="7" fill="#1F3A5F"/>
+  <text x="240" y="464" text-anchor="middle" class="t-b">t</text>
+  <text x="240" y="484" text-anchor="middle" class="t-s">anchor state observed here</text>
+
+  <circle cx="360" cy="440" r="5" fill="#2C6FB5"/><text x="360" y="464" text-anchor="middle" class="t-s">+1 h</text>
+  <circle cx="450" cy="440" r="5" fill="#2C6FB5"/><text x="450" y="464" text-anchor="middle" class="t-s">+3 h</text>
+  <circle cx="550" cy="440" r="5" fill="#2C6FB5"/><text x="550" y="464" text-anchor="middle" class="t-s">+12 h</text>
+  <circle cx="670" cy="440" r="5" fill="#2C6FB5"/><text x="670" y="464" text-anchor="middle" class="t-s">+24 h</text>
+  <circle cx="790" cy="440" r="5" fill="#2C6FB5"/><text x="790" y="464" text-anchor="middle" class="t-s">+48 h</text>
+  <circle cx="890" cy="440" r="5" fill="#2C6FB5"/><text x="890" y="464" text-anchor="middle" class="t-s">+72 h</text>
+
+  <path d="M248,434 C300,404 320,404 356,432" stroke="#2E8B8B" stroke-width="1.8" fill="none" marker-end="url(#t)"/>
+  <path d="M248,434 C360,384 480,384 546,430" stroke="#2E8B8B" stroke-width="1.8" fill="none" marker-end="url(#t)"/>
+  <path d="M248,434 C420,370 700,370 886,430" stroke="#2E8B8B" stroke-width="1.8" fill="none" marker-end="url(#t)"/>
+
+  <text x="600" y="504" text-anchor="middle" class="t-s">The same anchor is paired with each of the ten horizons, so a single observation contributes ten training rows that differ only in h and in their target.</text>
+
+  <!-- benefits -->
+  <rect x="24" y="524" width="1032" height="72" rx="12" fill="#E6F2EC" stroke="#2E7D52" stroke-width="1.6"/>
+  <text x="44" y="550" class="t-b">Why this matters</text>
+  <text x="44" y="572" class="t-s">Every horizon is trained on every city&#8217;s data, so a sparse lead time borrows strength from the rest; one artefact is registered, explained and monitored;</text>
+  <text x="44" y="590" class="t-s">and an unseen lead time can be served by interpolating h, because the model has learned how error grows with distance rather than memorising ten mappings.</text>
+</svg>
+</div></body></html>

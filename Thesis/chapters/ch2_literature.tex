@@ -1,0 +1,443 @@
+\chapter{Literature Review}
+\label{ch:literature}
+
+\section{Introduction}
+This chapter surveys the work on which the \projname\ builds. The survey is
+organised around the two halves of the problem the system addresses. The first
+half is scientific: what the Air Quality Index measures, how air quality has been
+forecast, and which modelling families are appropriate for a tabular,
+weather-driven, multi-horizon regression problem. The second half is
+operational: how a trained model is kept alive in production, which is the
+concern of the literature on feature stores, machine-learning operations,
+distribution drift and model governance. A third, shorter strand covers
+explainability and the honest evaluation of forecasts, both of which the system
+treats as first-class requirements rather than afterthoughts. The chapter closes
+with a literature matrix, an analysis of the gap this project addresses, and a
+statement of how each body of work informed the design.
+
+\section{Air Quality, Health and the Air Quality Index}
+
+\subsection{The Health Burden}
+The World Health Organization's global air-quality guidelines~\cite{ref:who}
+substantially tightened the recommended limits for fine particulate matter in
+2021, setting an annual mean guideline of 5\,$\mu$g/m$^3$ for
+PM\textsubscript{2.5} and a 24-hour guideline of 15\,$\mu$g/m$^3$, on the basis
+of accumulated evidence linking exposure to cardiovascular disease, respiratory
+disease, adverse birth outcomes and premature mortality. The State of Global Air
+report~\cite{ref:sga} places air pollution among the leading risk factors for
+death worldwide and identifies South Asia as the region carrying the heaviest
+exposure. Annual world air-quality reporting~\cite{ref:iqair} has for several
+consecutive years ranked Pakistan among the most polluted countries measured,
+with several Punjabi cities appearing among the most polluted urban areas
+globally. A World Bank assessment of the economic cost of outdoor air pollution
+in Pakistan~\cite{ref:worldbank} quantified the burden in terms of health
+expenditure and lost productivity and argued for monitoring and forecasting
+capacity as a prerequisite for any policy response.
+
+Two features of this burden are directly relevant to the design of a forecasting
+system. The first is that it is dominated by particulate matter rather than by
+gaseous pollutants, which justifies the decision, described in
+Chapter~\ref{ch:impl}, to compute the index from PM\textsubscript{2.5} and
+PM\textsubscript{10} where the index has to be computed at all. The second is
+that it is strongly seasonal: the exposure is concentrated in a winter smog
+season driven by temperature inversions, crop residue burning and reduced mixing
+height. Seasonality of that strength is exactly what a model with calendar and
+weather features can learn, and exactly what makes a static model decay.
+
+\subsection{The Air Quality Index}
+The Air Quality Index used in this project is the United States Environmental
+Protection Agency index, defined in the agency's technical assistance document
+for daily air-quality reporting~\cite{ref:epa}. The index is not measured; it is
+computed. For a pollutant concentration $C$ falling in the breakpoint interval
+$[C_{lo}, C_{hi}]$, whose corresponding index interval is $[I_{lo}, I_{hi}]$, the
+sub-index is the piecewise-linear interpolation
+
+\begin{equation}
+I = \frac{I_{hi} - I_{lo}}{C_{hi} - C_{lo}}\,(C - C_{lo}) + I_{lo},
+\end{equation}
+
+and the reported index is the \emph{maximum} of the pollutant sub-indices, on the
+principle that health risk is governed by the worst offender rather than by an
+average. The index is divided into six named health categories, from
+\emph{Good} to \emph{Hazardous}, each carrying standard advisory language. This
+categorical structure matters for the interface: a user does not need to
+interpret the number 163, but does need to know that it means ``unhealthy'' and
+that outdoor exertion should be limited.
+
+An important practical subtlety, and a common source of error in student
+implementations, is that the EPA defines gaseous breakpoints in parts per billion
+or parts per million while most data services report gas concentrations in
+micrograms per cubic metre. Applying the tables without a molar-mass conversion
+produces a wildly inflated sub-index. This project's treatment of that issue is
+described in Section~\ref{sec:impl-aqi}.
+
+\section{Approaches to Air-Quality Forecasting}
+
+\subsection{Deterministic Chemical Transport Modelling}
+The physically grounded approach simulates emission, advection, chemical
+transformation and deposition over a gridded domain. The Copernicus Atmosphere
+Monitoring Service~\cite{ref:cams} operates such a system globally and publishes
+composition forecasts, and regional implementations built on coupled
+meteorology-chemistry models are the basis of most national air-quality
+services. These models are indispensable for scientific attribution because they
+represent the physics explicitly. They are, however, impractical for a project of
+this kind: they require a maintained emissions inventory, meteorological boundary
+conditions and substantial computing capacity, none of which is available for
+free. The present work consumes the \emph{output} of such systems indirectly,
+since the reanalysis and forecast products it ingests are themselves derived from
+them.
+
+\subsection{Statistical Time-Series Modelling}
+The classical alternative fits an autoregressive integrated moving-average model,
+or a seasonal variant, to the pollutant series at a single site. Hyndman and
+Athanasopoulos~\cite{ref:fpp} give the standard modern treatment. Such models are
+cheap, interpretable and often surprisingly hard to beat at very short lead
+times, because pollutant series are strongly autocorrelated. Their limitation is
+structural: a univariate model extrapolates the series' own history and cannot
+consume a weather forecast, so its skill decays towards the series mean as the
+horizon lengthens. This is precisely the regime in which the present system must
+operate, since a three-day forecast is dominated by the weather that has not yet
+happened rather than by the pollution that already has.
+
+The same literature supplies the baseline against which any forecaster must be
+judged. The naive or \emph{persistence} forecast - predicting that the value at
+$t+h$ equals the value at $t$ - is the standard reference point, and Hyndman and
+Athanasopoulos are emphatic that a model failing to beat it has demonstrated
+nothing. This project therefore scores persistence explicitly in every training
+run and at every horizon.
+
+\subsection{Machine-Learning Regression}
+The dominant contemporary approach treats forecasting as supervised regression
+from engineered features to a future concentration. Yu et al.~\cite{ref:raq}
+demonstrated a random-forest approach to urban air-quality prediction from
+heterogeneous sensing data, and Pan~\cite{ref:xgbpm} reported gradient-boosted
+trees performing strongly on hourly PM\textsubscript{2.5} prediction. The
+appeal of the approach for this problem is that the strongest predictors of
+future pollution - future wind, temperature, humidity and precipitation - are
+themselves available as a free forecast, so the model can be given genuine
+information about the period it is predicting rather than being restricted to
+extrapolating the past.
+
+The two tree ensembles used here rest on well-established foundations. Random
+forests~\cite{ref:rf} reduce variance by averaging decorrelated trees grown on
+bootstrap samples with randomised feature subsets. Gradient boosting~\cite{ref:gb}
+instead fits trees sequentially to the residuals of the current ensemble,
+performing gradient descent in function space; XGBoost~\cite{ref:xgboost} is the
+scalable, regularised implementation of that idea that has become the default
+choice for tabular problems, and it is the champion model in this system. Ridge
+regression~\cite{ref:ridge} is included as a regularised linear reference point,
+which is useful diagnostically: a large gap between the linear model and the tree
+ensembles is evidence that the relationship being learned is genuinely non-linear
+and interactive.
+
+\subsection{Deep Sequence Models}
+Recurrent networks, and in particular the long short-term memory
+architecture~\cite{ref:lstm}, consume a sequence directly and can in principle
+learn temporal structure that a tabular model must be given explicitly through
+lag features. Li et al.~\cite{ref:lstmpm} applied an LSTM to air-pollutant
+concentration prediction and reported improvements over shallower baselines, and
+a substantial literature has followed in that direction.
+
+Against this, a body of careful comparative work argues that deep architectures do
+not dominate on tabular problems. Shwartz-Ziv and Armon~\cite{ref:tabnotall}
+found that gradient-boosted trees outperformed several purpose-built deep tabular
+architectures across a range of datasets, and Grinsztajn et
+al.~\cite{ref:whytrees} analysed \emph{why}: tree ensembles cope better with
+irregular target functions, are less affected by uninformative features, and are
+not biased towards rotationally invariant solutions in a space where the
+individual features carry meaning. This project treats the question empirically
+rather than by assumption: an LSTM was implemented and evaluated on the same task
+and the same chronological split as the tree ensembles, and the resulting
+comparison, reported in Chapter~\ref{ch:testing}, informed the decision about
+which model to promote.
+
+\subsection{Multi-Horizon Forecasting Strategies}
+When a forecast is required at many lead times, three strategies are available:
+\emph{recursive}, in which a one-step model is applied repeatedly to its own
+output; \emph{direct}, in which a separate model is trained for each horizon; and
+the hybrid or multi-output variants. Ben Taieb et al.~\cite{ref:multistep}
+compared these strategies systematically and identified the essential trade-off:
+the recursive strategy accumulates its own errors as the horizon grows, while the
+direct strategy avoids that accumulation at the cost of training and maintaining
+one model per horizon.
+
+The design adopted here is a variant of the direct strategy that avoids its cost.
+The horizon $h$ is supplied to a single model as an input feature, so one global
+estimator serves every lead time. This eliminates error accumulation, requires
+exactly one artefact to be versioned, registered, explained and monitored, and
+allows every horizon to be trained on the whole dataset rather than on a slice of
+it. The design and its consequences are developed in Section~\ref{sec:design-mh}.
+
+\section{Honest Evaluation of Forecasts}
+Two methodological points from the forecasting literature shape how this system
+reports its accuracy.
+
+The first concerns validation. Tashman~\cite{ref:tashman} reviewed out-of-sample
+testing practice and argued for rolling-origin evaluation over a single holdout,
+and Bergmeir and Benítez~\cite{ref:bergmeir} examined the use of cross-validation
+for time-series predictors and set out the conditions under which random $k$-fold
+partitioning is invalid. The essential point is that a randomly chosen validation
+set for a time series lets the model train on the future and test on the past,
+which flatters it. This project therefore splits strictly chronologically and,
+beyond that, reports a five-fold walk-forward backtest in which each fold trains
+on the past and tests on the window that follows.
+
+The second concerns reporting granularity. A multi-horizon forecaster summarised
+by one averaged error figure conceals the fact that skill decays sharply with
+lead time; a single number that mixes a one-hour and a 72-hour forecast is
+dominated by whichever horizon happens to be more numerous in the validation set,
+and it overstates usefulness at the horizons a user actually cares about. This
+project therefore reports RMSE, MAE and $R^2$ separately at every modelled
+horizon, alongside the persistence baseline at that same horizon.
+
+\section{Uncertainty Quantification}
+A point forecast without an interval invites false confidence. The most
+theoretically satisfying framework for attaching a distribution-free interval to
+an arbitrary regressor is conformal prediction, introduced by Vovk, Gammerman and
+Shafer~\cite{ref:conformal}; the computationally practical inductive or
+\emph{split} variant is due to Papadopoulos et al.~\cite{ref:inductive}, and Lei
+et al.~\cite{ref:leiconformal} give a modern treatment with finite-sample
+coverage guarantees. In its simplest form, split conformal prediction fits the
+model on a training set, computes residuals on a disjoint calibration set, and
+constructs the interval from the empirical quantiles of those residuals; the
+resulting interval attains the nominal coverage under exchangeability.
+
+The intervals in this system are constructed in exactly this spirit: residual
+quantiles are computed on the held-out chronological validation set and stored
+per horizon, so that the interval widens with lead time as the model's actual
+errors do. The exchangeability assumption is, strictly, not satisfied for a
+non-stationary time series, and Chapter~\ref{ch:testing} discusses the
+consequences of that honestly rather than claiming a guarantee the construction
+does not earn.
+
+\section{Explainable Machine Learning}
+Ribeiro et al.~\cite{ref:lime} introduced LIME, which explains an individual
+prediction by fitting an interpretable surrogate in its neighbourhood. Lundberg
+and Lee~\cite{ref:shap} subsequently unified several attribution methods under
+the framework of Shapley values from cooperative game theory, producing SHAP: the
+unique additive attribution satisfying local accuracy, missingness and
+consistency. The practical obstacle to Shapley values is their exponential cost,
+which Lundberg et al.~\cite{ref:treeshap} removed for tree ensembles with
+TreeSHAP, a polynomial-time exact algorithm that also supports aggregation of
+local attributions into global importance.
+
+Two properties make SHAP the right choice here. It is additive, so the
+attributions for a single forecast sum exactly to the difference between that
+forecast and the model's base value - which means an explanation can be rendered
+as an arithmetic statement a non-specialist can follow, rather than as a
+ranking whose units are unclear. And TreeSHAP is exact and fast for the
+gradient-boosted champion, so an explanation can be computed inside a batch job
+without materially lengthening it. Section~\ref{sec:impl-shap} describes how the
+attributions are translated into natural language.
+
+\section{Feature Stores and the Feature-Training-Inference Pattern}
+Sculley et al.~\cite{ref:techdebt} made the observation that frames the
+operational half of this project: in a real machine-learning system the model is
+a small fraction of the code, and the surrounding infrastructure - data
+collection, feature extraction, configuration, serving, monitoring - is where
+the complexity and the accumulated debt actually live. They identified
+\emph{training-serving skew}, in which features are computed one way for
+training and another way for inference, as a recurring and particularly damaging
+failure mode.
+
+The feature store emerged as the industrial answer to that problem. Introduced
+publicly as a component of Uber's Michelangelo platform~\cite{ref:michelangelo},
+it is a versioned, queryable repository of engineered features with a defined
+schema, primary keys and event time, written by feature pipelines and read by
+both training and inference. Because both sides read the same table, skew is
+eliminated by construction rather than by discipline. Hopsworks, the platform used
+in this project, provides such a store together with an integrated model
+registry~\cite{ref:hopsworks}.
+
+The architectural pattern that follows from this is the
+Feature-Training-Inference decomposition~\cite{ref:fti}, in which a machine
+learning system is expressed as exactly three pipelines that share no code path
+and communicate only through the feature store and the model registry. The
+pattern's value for this project is specific and practical: because the only
+durable state lives in managed services, the compute can be entirely ephemeral,
+which is what allows the whole system to run on a free scheduler.
+
+\section{Machine-Learning Operations}
+Breck et al.~\cite{ref:mltestscore} proposed a rubric for production readiness in
+machine-learning systems, scoring tests across four areas - features and data,
+model development, infrastructure, and monitoring - and observing that most
+deployed systems score poorly on the last two. Their rubric supplies, in effect,
+a checklist against which the present system can be assessed, and several of its
+items map directly onto components implemented here: that the model is tested
+against a simpler baseline, that training is reproducible and scheduled, that
+model quality is validated before serving, and that the model can be rolled back.
+
+Two of those items deserve individual attention.
+
+\subsection{Gated Promotion and the Champion-Challenger Pattern}
+The champion-challenger pattern originates in credit scoring and marketing
+analytics, where it is standard practice that an incumbent model continues to
+make decisions until a challenger has demonstrated superiority on an agreed
+metric; Siddiqi~\cite{ref:siddiqi} documents it in that setting alongside the
+monitoring practice discussed below. Transplanted into an automated retraining
+pipeline, it answers a question that automation creates: if a system retrains
+every night, what stops it from deploying whatever it happened to produce last
+night? Without a gate, a retrain on an unrepresentative window can quietly
+degrade a live service. The gate implemented here, described in
+Section~\ref{sec:impl-gate}, promotes a challenger only if it improves on the
+champion's validation RMSE, and records every decision - including refusals -
+in a persistent leaderboard.
+
+\subsection{Drift Detection}
+Gama et al.~\cite{ref:driftsurvey} survey concept drift and its adaptation
+strategies, distinguishing between change in the input distribution and change in
+the relationship between inputs and target, and between abrupt, gradual and
+recurring change. For a seasonal environmental system, \emph{recurring} drift is
+the normal condition rather than a fault, which is an important interpretive
+point: a drift alarm in November does not mean the system is broken.
+
+The measure used in this project is the Population Stability Index, long
+established in credit-risk monitoring~\cite{ref:siddiqi}. For a reference
+distribution binned into $B$ bins with proportions $r_b$, and a current
+distribution with proportions $c_b$ over the same bin edges,
+
+\begin{equation}
+\mathrm{PSI} = \sum_{b=1}^{B} (c_b - r_b)\,\ln\!\left(\frac{c_b}{r_b}\right),
+\end{equation}
+
+with the conventional interpretation that values below 0.10 indicate a stable
+population, values between 0.10 and 0.25 moderate shift, and values above 0.25
+significant shift. PSI is attractive here because it is non-parametric, cheap,
+computed per feature so that the responsible variable is identified, and
+interpretable against a threshold that does not need to be tuned. Its weakness -
+that it measures input drift only, and says nothing about whether accuracy has
+actually suffered - is why this system pairs it with direct measurement of
+realised forecast error against observed outcomes.
+
+\section{Language Models as an Interface Layer}
+The final component of the system exposes its forecasts to a large language
+model, so that a user can ask a question in ordinary language rather than reading
+a chart. The relevant methodological concern is grounding: a model asked about
+air quality will otherwise produce a plausible number from its parameters rather
+than the system's actual forecast. The mitigation adopted is tool use, in which
+the model is given a declared set of functions and returns a structured call
+rather than prose, and the answer is composed from the function's real return
+value. The Model Context Protocol~\cite{ref:mcp} standardises the declaration and
+invocation of such tools across clients, which allows the same four grounded
+functions to serve both the dashboard's advisor and any external protocol client.
+
+\section{Literature Review Matrix}
+Table~\ref{tab:litmatrix} condenses the survey, relating each strand of work to
+what it contributes and to what it leaves open for this project.
+
+\begin{xltabular}{\textwidth}{P{2.9cm} P{3.4cm} Y}
+\caption{Literature review matrix.}\label{tab:litmatrix}\\
+\toprule
+\bfseries Strand & \bfseries Representative work & \bfseries Contribution and limitation for this project \\
+\midrule
+\endfirsthead
+\toprule
+\bfseries Strand & \bfseries Representative work & \bfseries Contribution and limitation for this project \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+Health burden and index definition & WHO~\cite{ref:who}; EPA~\cite{ref:epa};
+IQAir~\cite{ref:iqair} & Defines what is being predicted and why it matters; establishes
+that the burden is particulate-dominated and seasonal. Does not address forecasting. \\
+Chemical transport modelling & CAMS~\cite{ref:cams} & Physically rigorous and the
+scientific reference. Requires an emissions inventory and computing capacity that a
+free-tier project cannot supply. \\
+Statistical time series & Hyndman and Athanasopoulos~\cite{ref:fpp} & Supplies the
+persistence baseline and the discipline of comparing against it. Univariate models cannot
+consume a weather forecast, so they fade at long horizons. \\
+Tree ensembles & Breiman~\cite{ref:rf}; Friedman~\cite{ref:gb};
+Chen and Guestrin~\cite{ref:xgboost} & The modelling core: strong on tabular,
+interactive, weather-driven data and cheap to retrain daily. Requires temporal
+structure to be supplied explicitly through engineered features. \\
+Deep sequence models & Hochreiter and Schmidhuber~\cite{ref:lstm};
+Li et al.~\cite{ref:lstmpm} & Learns temporal structure directly and is a legitimate
+contender. Costly to train, single-horizon as usually formulated, and harder to explain. \\
+Trees versus deep learning on tabular data & Shwartz-Ziv and
+Armon~\cite{ref:tabnotall}; Grinsztajn et al.~\cite{ref:whytrees} & Provides the
+principled reason to test rather than assume, and predicts the outcome observed here. \\
+Multi-horizon strategy & Ben Taieb et al.~\cite{ref:multistep} & Frames the direct versus
+recursive choice. Leaves open the practical cost of one model per horizon, which the
+horizon-as-feature design resolves. \\
+Validation methodology & Tashman~\cite{ref:tashman};
+Bergmeir and Benítez~\cite{ref:bergmeir} & Justifies chronological splitting and
+walk-forward backtesting over random cross-validation. \\
+Uncertainty & Vovk et al.~\cite{ref:conformal};
+Lei et al.~\cite{ref:leiconformal} & Gives a distribution-free construction for
+intervals. Its exchangeability assumption is imperfect for a seasonal series. \\
+Explainability & Lundberg and Lee~\cite{ref:shap};
+Lundberg et al.~\cite{ref:treeshap} & Exact, fast, additive attributions for tree models,
+which can be rendered arithmetically in plain language. \\
+Feature stores and FTI & Sculley et al.~\cite{ref:techdebt};
+Michelangelo~\cite{ref:michelangelo}; Dowling~\cite{ref:fti} & Supplies the architecture
+that eliminates training-serving skew and permits stateless compute. Assumes a managed
+store is available, which the free tier constrains. \\
+MLOps practice & Breck et al.~\cite{ref:mltestscore};
+Siddiqi~\cite{ref:siddiqi} & Provides the readiness rubric, the promotion gate and the
+drift measure. Neither is specific to environmental forecasting. \\
+Drift & Gama et al.~\cite{ref:driftsurvey} & Distinguishes recurring seasonal drift from
+genuine decay, which is essential to interpreting this system's own alarms. \\
+Grounded language interfaces & MCP~\cite{ref:mcp} & Standardises tool declaration so a
+language model answers from real forecasts rather than from its parameters. \\
+\end{xltabular}
+
+\section{Research Gap Analysis}
+Read together, the literature leaves four gaps that this project addresses.
+
+\textbf{Gap 1 - Coverage.} Published air-quality forecasting work for Pakistan is
+overwhelmingly concerned with Lahore or Karachi, and models are typically fitted
+per site. A single global model conditioned on location, trained across 22 cities
+spanning every province and territory, is not the usual formulation, and it
+carries a specific benefit: a city with a shorter or noisier record borrows
+strength from the rest.
+
+\textbf{Gap 2 - Operation rather than experiment.} The overwhelming majority of
+the modelling literature reports an accuracy figure for a model trained once.
+Scheduled retraining, gated promotion, a durable registry and self-monitoring are
+described in the MLOps literature and in industrial platform papers, but are
+rarely instantiated in published air-quality work. This project's contribution is
+to assemble the two.
+
+\textbf{Gap 3 - Reporting that reflects use.} Where multi-horizon forecasts are
+published, accuracy is usually reported as a single averaged number. Reporting
+per horizon, against a per-horizon baseline, and under walk-forward backtesting,
+gives a materially different - and less flattering, therefore more useful -
+picture of what a three-day forecast is actually worth.
+
+\textbf{Gap 4 - Explanation and uncertainty as delivered features.} SHAP and
+conformal intervals are both well established as techniques, but they are usually
+evaluated in isolation. Here they are delivered: every forecast in the public
+interface carries an interval and a sentence explaining what drove it, and the
+what-if simulator lets a user perturb the drivers and watch the model respond.
+
+\section{Relevance to This Project}
+Each strand of the survey translated into a concrete design decision.
+
+The health and index literature fixed the target: the EPA AQI, with its six
+categories and their advisory language, computed from particulate matter where it
+must be computed at all. The comparison of forecasting traditions ruled out
+physical simulation on resource grounds and univariate statistics on horizon
+grounds, and pointed to supervised regression with forecast weather as inputs.
+The tabular-learning literature justified making XGBoost the primary candidate
+while requiring that the sequence-model alternative be measured rather than
+dismissed. The multi-horizon literature motivated the horizon-as-feature
+formulation. The validation literature dictated chronological splitting, a
+persistence baseline at every horizon and a walk-forward backtest. The conformal
+literature supplied the interval construction. The explainability literature
+supplied TreeSHAP and the additive property that makes plain-language rendering
+possible. The feature-store and FTI literature supplied the architecture, and the
+MLOps literature supplied the promotion gate, the registry and the drift measure
+that make the system self-operating. The tool-use literature supplied the
+grounding discipline for the advisor.
+
+\section{Summary of Literature Review}
+This chapter reviewed the health and regulatory basis of the Air Quality Index,
+the three traditions of air-quality forecasting and the reasons for choosing
+supervised machine learning among them, the model families relevant to a tabular
+multi-horizon regression and the evidence on trees versus deep networks, the
+methodology of honest forecast evaluation and uncertainty quantification, the
+explainability techniques appropriate to tree ensembles, and the operational
+literature on feature stores, the Feature-Training-Inference pattern, gated
+promotion and drift. It identified four gaps - coverage, operation, reporting
+granularity, and delivered explanation - which the remainder of this thesis
+addresses. The next chapter states the problem formally.

@@ -1,0 +1,100 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="_style.css"></head>
+<body><div id="canvas">
+<svg width="1160" height="700" viewBox="0 0 1160 700">
+  <defs>
+    <marker id="a" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#2C6FB5"/></marker>
+    <marker id="g" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#2E7D52"/></marker>
+  </defs>
+
+  <text x="580" y="32" text-anchor="middle" class="t-title">The Three Decoupled Pipelines and Their Schedules</text>
+
+  <!-- column headers -->
+  <rect x="30" y="58" width="330" height="40" rx="9" fill="#1F3A5F"/>
+  <text x="195" y="84" text-anchor="middle" class="t-h" style="fill:#fff">Feature Pipeline - hourly</text>
+  <rect x="415" y="58" width="330" height="40" rx="9" fill="#2C6FB5"/>
+  <text x="580" y="84" text-anchor="middle" class="t-h" style="fill:#fff">Training Pipeline - daily</text>
+  <rect x="800" y="58" width="330" height="40" rx="9" fill="#256f6f"/>
+  <text x="965" y="84" text-anchor="middle" class="t-h" style="fill:#fff">Inference Pipeline - batch</text>
+
+  <text x="195" y="118" text-anchor="middle" class="t-s">cron 5 * * * * &#160;(every hour at :05)</text>
+  <text x="580" y="118" text-anchor="middle" class="t-s">cron 30 2 * * * &#160;(02:30 UTC)</text>
+  <text x="965" y="118" text-anchor="middle" class="t-s">immediately after each training run</text>
+
+  <!-- FEATURE column -->
+  <rect x="30" y="136" width="330" height="330" rx="12" fill="#F7FAFD" stroke="#1F3A5F" stroke-width="1.6"/>
+  <rect x="50" y="156" width="290" height="52" rx="8" fill="#FBEEDF" stroke="#C8881A"/>
+  <text x="195" y="178" text-anchor="middle" class="t-b">Fetch 22 cities</text>
+  <text x="195" y="197" text-anchor="middle" class="t-s">past_days = 7, air quality + weather</text>
+
+  <rect x="50" y="220" width="290" height="52" rx="8" fill="#EEF4FA" stroke="#B9C6D6"/>
+  <text x="195" y="242" text-anchor="middle" class="t-b">Engineer features per city</text>
+  <text x="195" y="261" text-anchor="middle" class="t-s">lags &#183; rolling &#183; cyclical &#183; wind vectors</text>
+
+  <rect x="50" y="284" width="290" height="52" rx="8" fill="#E6F2EC" stroke="#2E7D52"/>
+  <text x="195" y="306" text-anchor="middle" class="t-b">Upsert into the feature group</text>
+  <text x="195" y="325" text-anchor="middle" class="t-s">key (city, timestamp) - re-runs are safe</text>
+
+  <rect x="50" y="352" width="290" height="94" rx="8" fill="#FFFFFF" stroke="#B9C6D6" stroke-dasharray="4 3"/>
+  <text x="195" y="376" text-anchor="middle" class="t-b">Backfill (workflow_dispatch)</text>
+  <text x="195" y="398" text-anchor="middle" class="t-s">same logic over 2023-01 &#8594; today,</text>
+  <text x="195" y="416" text-anchor="middle" class="t-s">three-month chunks, per-city writes,</text>
+  <text x="195" y="434" text-anchor="middle" class="t-s">history-aware resume</text>
+
+  <!-- TRAINING column -->
+  <rect x="415" y="136" width="330" height="330" rx="12" fill="#F7FAFD" stroke="#2C6FB5" stroke-width="1.6"/>
+  <rect x="435" y="156" width="290" height="46" rx="8" fill="#E6F2EC" stroke="#2E7D52"/>
+  <text x="580" y="176" text-anchor="middle" class="t-b">Read the whole feature table</text>
+  <text x="580" y="194" text-anchor="middle" class="t-s">via the feature view</text>
+
+  <rect x="435" y="214" width="290" height="46" rx="8" fill="#EEF4FA" stroke="#B9C6D6"/>
+  <text x="580" y="234" text-anchor="middle" class="t-b">Build the supervised set</text>
+  <text x="580" y="252" text-anchor="middle" class="t-s">10 horizons &#183; 200,000 sampled rows</text>
+
+  <rect x="435" y="272" width="290" height="46" rx="8" fill="#EEF4FA" stroke="#B9C6D6"/>
+  <text x="580" y="292" text-anchor="middle" class="t-b">Chronological split, train 4 families</text>
+  <text x="580" y="310" text-anchor="middle" class="t-s">persistence &#183; Ridge &#183; forest &#183; XGBoost</text>
+
+  <rect x="435" y="330" width="290" height="46" rx="8" fill="#FBEEDF" stroke="#C8881A"/>
+  <text x="580" y="350" text-anchor="middle" class="t-b">Champion-challenger gate</text>
+  <text x="580" y="368" text-anchor="middle" class="t-s">promote only on a lower validation RMSE</text>
+
+  <rect x="435" y="388" width="290" height="58" rx="8" fill="#E6F2EC" stroke="#2E7D52"/>
+  <text x="580" y="410" text-anchor="middle" class="t-b">Register the champion</text>
+  <text x="580" y="430" text-anchor="middle" class="t-s">+ refresh evaluation and monitoring</text>
+
+  <!-- INFERENCE column -->
+  <rect x="800" y="136" width="330" height="330" rx="12" fill="#F7FAFD" stroke="#256f6f" stroke-width="1.6"/>
+  <rect x="820" y="156" width="290" height="46" rx="8" fill="#E6F2EC" stroke="#2E7D52"/>
+  <text x="965" y="176" text-anchor="middle" class="t-b">Load the champion bundle</text>
+  <text x="965" y="194" text-anchor="middle" class="t-s">from the model registry</text>
+
+  <rect x="820" y="214" width="290" height="46" rx="8" fill="#FBEEDF" stroke="#C8881A"/>
+  <text x="965" y="234" text-anchor="middle" class="t-b">Fetch anchor state + weather forecast</text>
+  <text x="965" y="252" text-anchor="middle" class="t-s">past 3 days, next 4 days, per city</text>
+
+  <rect x="820" y="272" width="290" height="46" rx="8" fill="#EEF4FA" stroke="#B9C6D6"/>
+  <text x="965" y="292" text-anchor="middle" class="t-b">Predict 72 hourly values + interval</text>
+  <text x="965" y="310" text-anchor="middle" class="t-s">aggregate to a three-day view</text>
+
+  <rect x="820" y="330" width="290" height="46" rx="8" fill="#EEF4FA" stroke="#B9C6D6"/>
+  <text x="965" y="350" text-anchor="middle" class="t-b">Explain the peak hour with SHAP</text>
+  <text x="965" y="368" text-anchor="middle" class="t-s">and raise a hazard alert if needed</text>
+
+  <rect x="820" y="388" width="290" height="58" rx="8" fill="#1F3A5F"/>
+  <text x="965" y="410" text-anchor="middle" class="t-b" style="fill:#fff">Write predictions.json</text>
+  <text x="965" y="430" text-anchor="middle" class="t-s" style="fill:#cdd9e8">and log each forecast for later scoring</text>
+
+  <!-- shared state bar -->
+  <rect x="30" y="512" width="1100" height="72" rx="12" fill="#E6F2EC" stroke="#2E7D52" stroke-width="2"/>
+  <text x="580" y="540" text-anchor="middle" class="t-h">Hopsworks Feature Store + Model Registry - the shared, durable state</text>
+  <text x="580" y="566" text-anchor="middle" class="t-s">Each pipeline reads and writes here and nowhere else, so any one of them can fail, be re-run, or be rewritten without touching the others.</text>
+
+  <path d="M195,466 L195,506" stroke="#2E7D52" stroke-width="2.4" fill="none" marker-end="url(#g)"/>
+  <path d="M580,506 L580,470" stroke="#2E7D52" stroke-width="2.4" fill="none" marker-end="url(#g)"/>
+  <path d="M580,466 L580,506" stroke="#2E7D52" stroke-width="2.4" fill="none" marker-end="url(#g)"/>
+  <path d="M965,506 L965,470" stroke="#2E7D52" stroke-width="2.4" fill="none" marker-end="url(#g)"/>
+
+  <text x="580" y="628" text-anchor="middle" class="t-s">The dashed backfill box runs once by hand; everything else runs unattended on GitHub&#8217;s scheduler.</text>
+  <text x="580" y="652" text-anchor="middle" class="t-s">Total running cost of the compute plane: zero, within the free tier.</text>
+</svg>
+</div></body></html>

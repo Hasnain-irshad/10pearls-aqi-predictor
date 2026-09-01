@@ -1,0 +1,826 @@
+\chapter{Implementation}
+\label{ch:impl}
+
+\section{Introduction}
+This chapter describes how the design of Chapter~\ref{ch:design} was built. It
+begins with the technology stack and the reasoning behind each choice, then
+follows the data as it moves through the system: ingestion, index computation,
+feature engineering, the supervised builder, the three pipelines, the model
+layer, the promotion gate and the registry, inference, explanation, simulation
+and monitoring. It then covers the serving layer, the continuous-integration
+workflows and the production deployment, and closes with the failures encountered
+during development and what each of them required.
+
+Code excerpts are presented as figures, captioned below and centred, in keeping
+with the convention that the document numbers only figures and tables. Excerpts
+are lightly abridged for length; the behaviour described is that of the running
+system.
+
+\section{Technology Stack}
+Table~\ref{tab:stack} records the technology choices and their justification.
+
+\begin{xltabular}{\textwidth}{P{2.6cm} P{3.1cm} Y}
+\caption{Technology stack and the reason for each choice.}\label{tab:stack}\\
+\toprule
+\bfseries Layer & \bfseries Choice & \bfseries Justification \\
+\midrule
+\endfirsthead
+\toprule
+\bfseries Layer & \bfseries Choice & \bfseries Justification \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+Language & Python 3.11 & The machine-learning ecosystem; pinned below 3.12 for
+compatibility across the dependency set at the time of development. \\
+Data source & Open-Meteo~\cite{ref:openmeteo} & Free, \emph{keyless}, hourly,
+global, and serving both multi-year history and a multi-day forecast from the
+same request shape. The absence of a credential removes an entire class of
+operational failure from the scheduled jobs. \\
+Feature store and model registry & Hopsworks Serverless~\cite{ref:hopsworks} & A
+managed free tier providing both halves of the state plane, with primary-key
+upserts, event time and metric-tagged model versions. \\
+Orchestration & GitHub Actions~\cite{ref:ghactions} & Free scheduled compute,
+co-located with the source, with secret injection and concurrency groups. \\
+Tabular processing & pandas~\cite{ref:pandas} & The standard library for the
+grouped, shifted, windowed operations that the feature design requires. \\
+Classical models & scikit-learn~\cite{ref:sklearn} & Ridge, random forest,
+metrics, standardisation and the time-series splitter used for the backtest. \\
+Champion model & XGBoost~\cite{ref:xgboost} & The strongest candidate measured;
+trains a 200,000-row, 27-feature problem in about a minute on CPU, which is what
+makes a nightly retrain feasible. \\
+Sequence-model study & TensorFlow / Keras~\cite{ref:tensorflow} & Used to build
+and evaluate the LSTM alternative; deliberately excluded from the deployment
+image. \\
+Explainability & SHAP (TreeExplainer)~\cite{ref:treeshap} & Exact, polynomial-time
+attributions for tree ensembles, with the additive property that makes
+plain-language rendering possible. \\
+Backend & FastAPI and Uvicorn~\cite{ref:fastapi} & Typed, asynchronous, with
+request-model validation and automatic interface documentation. \\
+Frontend & React with Vite~\cite{ref:react,ref:vite} & Component model suited to
+a multi-tab dashboard; Vite produces a small static bundle deployable to an edge
+host. \\
+Charting and maps & Recharts and react-leaflet~\cite{ref:leaflet} & Responsive
+charts with band series for the prediction interval, and an interactive map of
+Pakistan. \\
+Advisor & Gemini or Groq (free tiers), or Claude, over the Model Context
+Protocol~\cite{ref:mcp} & Structured tool calling, so answers are grounded in the
+system's own forecasts. The provider is chosen from whichever API key is present,
+so the advisor needs no paid account; MCP publishes the same tools to external
+clients. \\
+Deployment & Docker on Railway; Vercel~\cite{ref:docker} & A container gives full
+control of the backend image; the frontend needs no server at all. \\
+Testing & pytest~\cite{ref:pytest} & Unit tests over the index computation, the
+feature builder and the supervised assembly. \\
+\end{xltabular}
+
+\section{Configuration as a Single Source of Truth}
+One module defines everything the rest of the system needs to agree on: the
+project root and the derived data and model directories, the credentials read
+from the environment, the feature-store object names and versions, the forecast
+horizon, and the list of supported cities. Each city is an immutable record of
+name, coordinates, province and timezone.
+
+The consequence is that adding a city is a single line, and that no module
+anywhere else in the codebase contains a hard-coded path, city name or object
+version. The path derivation deserves note because it later mattered in
+deployment: the project root is computed relative to the configuration module's
+own location, which is why the deployment image installs the package in editable
+mode rather than copying it into the interpreter's library directory - an
+ordinary install would have resolved the root to a location containing none of
+the committed artefacts.
+
+\section{Data Ingestion}
+Ingestion wraps three provider endpoints behind one helper. The air-quality
+endpoint serves both history and forecast; weather is split between a forecast
+endpoint and an archive endpoint derived from ERA5~\cite{ref:era5}, and the
+helper selects between them according to whether an explicit date range was
+requested. Seven pollutant variables and ten weather variables are fetched and
+merged on the observation hour, and the merged frame is tagged with the city name
+and its coordinates, giving 21 raw columns.
+
+The session is configured to retry, because these jobs run unattended. A momentary
+throttle or gateway error from the provider would otherwise fail an entire hourly
+run; instead it is retried with exponential backoff on precisely the status codes
+that indicate a transient condition, as Figure~\ref{fig:code-retry} shows.
+
+\begin{figure}[htbp]\centering
+\begin{lstlisting}[language=Python]
+def _session(retries: int = 4, backoff: float = 1.5) -> requests.Session:
+    """Retry transient failures: this runs unattended every hour."""
+    retry = Retry(
+        total=retries,
+        backoff_factor=backoff,          # waits 1.5s, 3s, 6s, ...
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=frozenset(["GET"]),
+    )
+    session = requests.Session()
+    session.mount("https://", HTTPAdapter(max_retries=retry))
+    return session
+\end{lstlisting}
+\codegap
+\caption{The retrying HTTP session used for every provider request.}
+\label{fig:code-retry}
+\end{figure}
+
+\section{The Air Quality Index}
+\label{sec:impl-aqi}
+The index module implements the EPA definition~\cite{ref:epa} directly: the six
+index bands, the concentration breakpoints per pollutant, the piecewise-linear
+sub-index formula, the maximum-over-sub-indices rule, and the six health
+categories with their advisory text. The categories are used throughout the
+system - for the colour scale, the alert wording and the advisor's answers - so
+defining them once here keeps the interface, the API and the language model in
+agreement.
+
+Two implementation decisions in this module matter.
+
+The first is the treatment of gases. As noted in Chapter~\ref{ch:literature}, the
+EPA specifies gaseous breakpoints in volumetric mixing ratios while the provider
+reports mass concentrations. Rather than apply an approximate conversion, the
+computed index is restricted to the two particulate species, whose breakpoints
+are already expressed in the units the provider uses. This is a defensible
+restriction on this data - particulate matter dominates the index in every city
+studied - and it avoids a class of error that would be invisible in aggregate
+metrics, since the index is a maximum and one wrong sub-index would silently
+dominate every affected row. The restriction is asserted by a unit test that
+feeds an enormous carbon monoxide value alongside clean particulate readings and
+requires the index to be unaffected.
+
+The second is precedence. Where the provider supplies its own index value it is
+preferred, because the provider applies the correct EPA averaging windows; the
+locally computed value is used only to fill gaps. The module thus serves both as
+the fallback computation and as the documentation of what the predicted number
+actually means.
+
+\section{Feature Engineering}
+The feature builder takes a raw hourly frame and produces the 74-column
+engineered table specified in Chapter~\ref{ch:design}. It runs in a fixed order,
+because the change, lag and rolling families all require the target column to
+exist first.
+
+The two properties that make the feature table trustworthy are visible in
+Figure~\ref{fig:code-roll}. Every rolling window is shifted by one observation
+before aggregation, so that it terminates at the previous hour, and every family
+is computed inside a single city, because the multi-city entry point groups by
+city and engineers each group independently before concatenating.
+
+\begin{figure}[htbp]\centering
+\begin{lstlisting}[language=Python]
+def _add_rolling_features(df: pd.DataFrame) -> pd.DataFrame:
+    # The .shift(1) is the anti-leakage guard: the window ends at the
+    # PREVIOUS hour and never includes the current observation.
+    for col in _SERIES_COLS:
+        for win in _ROLL_WINDOWS:
+            roll = df[col].shift(1).rolling(
+                win, min_periods=max(2, win // 2))
+            df[f"{col}_roll_mean_{win}h"] = roll.mean()
+            df[f"{col}_roll_std_{win}h"]  = roll.std()
+            df[f"{col}_roll_max_{win}h"]  = roll.max()
+    return df
+
+
+def build_features_all_cities(raw_all, *, dropna_target=True):
+    # Lags must never reach across a city boundary: Lahore's value from
+    # 24 hours ago is meaningless for Karachi.
+    parts = [build_features(g, dropna_target=dropna_target)
+             for _, g in raw_all.groupby("city", sort=False)]
+    return pd.concat(parts, ignore_index=True)
+\end{lstlisting}
+\codegap
+\caption{The two mechanisms that prevent leakage: a shifted rolling window and
+per-city grouping.}
+\label{fig:code-roll}
+\end{figure}
+
+The builder also computes the feature group's primary key, converting the
+observation datetime to epoch seconds by subtracting the Unix epoch and dividing
+by a one-second interval. This slightly indirect formulation was adopted because
+the direct conversion helper's behaviour differs across major pandas versions,
+and the primary key must be stable for the upsert semantics to hold.
+
+\section{The Multi-Horizon Supervised Builder}
+The supervised builder implements Section~\ref{sec:design-mh}. For each city it
+sorts by time and then, for each of the ten horizons, constructs a block in which
+the target-time features are taken from the current row, the anchor-state
+features are taken from $h$ rows earlier by shifting, the horizon column is set to
+$h$, and the target is the index at the current row. Blocks are concatenated,
+rows with an incomplete anchor are dropped, and the result is subsampled with a
+fixed seed. Figure~\ref{fig:code-sup} shows the core.
+
+\begin{figure}[htbp]\centering
+\begin{lstlisting}[language=Python]
+for city, g in features.groupby("city", sort=False):
+    g = g.sort_values("datetime").reset_index(drop=True)
+    for h in horizons:
+        block = pd.DataFrame()
+        for col in TARGET_TIME_FEATURES:     # known for the future hour tau
+            block[col] = g[col]
+        for col in ANCHOR_STATE_FEATURES:    # observed h hours before tau
+            block[f"{col}_anchor"] = g[col].shift(h)
+        block["horizon"] = h                 # the horizon IS a feature
+        block[TARGET_COLUMN] = g["aqi"]      # AQI at tau
+        block["city"], block["datetime"] = city, g["datetime"]
+        blocks.append(block)
+\end{lstlisting}
+\codegap
+\caption{Assembly of the multi-horizon supervised set. One observation
+contributes up to ten rows, differing only in the horizon and the target.}
+\label{fig:code-sup}
+\end{figure}
+
+The chronological split is implemented as a quantile of the datetime column
+rather than a positional cut, so that it remains correct even when the rows are
+unevenly distributed in time after subsampling. The datetime column is coerced to
+a datetime type inside the split function rather than being assumed, for a reason
+discovered in production and discussed in Section~\ref{sec:impl-challenges}.
+
+\section{The Feature Pipeline}
+\label{sec:impl-feature-pipeline}
+The hourly pipeline is deliberately short: it fetches the last seven days for all
+22 cities, engineers features per city, and upserts the result. Its two
+non-obvious properties are both correctness properties.
+
+It fetches seven days rather than one hour, because the lag and rolling features
+for the newest observations need history behind them; requesting only the newest
+hour would produce a row whose 24-hour features were all missing. The resulting
+overlap with data already stored is not a problem, because the write is an upsert
+on the composite key: re-running the pipeline, or running it twice in the same
+hour, cannot create a duplicate row. Idempotence of this kind is what allows the
+recovery strategy for every failure in this system to be ``run it again''.
+
+\section{The Backfill Pipeline}
+The backfill runs the same feature logic over the full history. It is triggered
+manually and it is the component that required the most hardening, because it is
+the only job that runs for hours and touches every city.
+
+It fetches each city's history in three-month chunks and concatenates them before
+engineering features, so that lags and rolling windows are computed over a
+contiguous series rather than being reset at every chunk boundary. It writes each
+city as that city completes, rather than accumulating everything and writing once,
+so that an interruption costs at most one city. It catches per-city exceptions and
+continues, so that one failing city does not abort the other twenty-one.
+
+Its resume logic is history-aware, and the distinction matters. An earlier version
+skipped any city already present in the store; but the hourly pipeline seeds every
+city with recent rows within an hour of being enabled, so on the next run every
+city looked present and the backfill skipped all of them, silently leaving the
+store with a week of history instead of three years. The corrected logic asks a
+different question - does this city's earliest stored observation reach back to
+the requested start date? - and only then treats the city as complete.
+Figure~\ref{fig:code-resume} shows it.
+
+\begin{figure}[htbp]\centering
+\begin{lstlisting}[language=Python]
+# History-aware resume: a city counts as done only if its data
+# already reaches back to `start`. A city with merely recent rows
+# (seeded by the hourly pipeline) is NOT done and gets backfilled.
+coverage = city_coverage()          # {city: earliest date present}
+done = {c for c, earliest in coverage.items()
+        if earliest is not None and earliest <= start_date}
+partial = {c for c in coverage if c not in done}
+\end{lstlisting}
+\codegap
+\caption{History-aware resume in the backfill. Presence in the store is not
+evidence of completeness.}
+\label{fig:code-resume}
+\end{figure}
+
+\section{The Storage Layer}
+The storage facade exposes four operations and selects a backend by whether a
+credential is configured, degrading to the local columnar backend when the
+managed client is not installed. That second condition is not hypothetical: on
+the development platform the managed client cannot be installed at all, because
+one of its transitive cryptographic dependencies fails to build there. The facade
+turns a hard platform incompatibility into a configuration detail.
+
+The managed backend concentrates every vendor-specific call in one module. Three
+of its choices were forced by the free tier and are recorded here as findings.
+The feature group is created with a time-travel table format that materialises
+server-side, because the platform's newer default format requires a client
+library that the base installation does not ship, and group creation fails
+outright without it. Statistics computation is disabled, because the profiler over
+74 columns exhausted the free executor's memory and failed the materialisation
+job; the statistics are used only by the platform's own interface and by no
+pipeline. And inserts do not block on materialisation, for the reason given in
+Figure~\ref{fig:code-insert}.
+
+\begin{figure}[htbp]\centering
+\begin{lstlisting}[language=Python]
+def insert_features(project, df, *, wait: bool = False) -> None:
+    """Upsert features (non-blocking by default).
+
+    On the free tier a Spark executor occasionally hangs at
+    INITIALIZING; a blocking insert then freezes the whole backfill
+    until the scheduler kills it at its time cap. Non-blocking is
+    safe here because inserts are idempotent primary-key upserts
+    and the backfill resumes by coverage.
+    """
+    fg = get_feature_group(project)
+    fg.insert(_sanitize(df), write_options={"wait_for_job": wait})
+\end{lstlisting}
+\codegap
+\caption{Non-blocking, idempotent feature insertion.}
+\label{fig:code-insert}
+\end{figure}
+
+\section{The Training Pipeline}
+The daily training pipeline implements use case UC-5. It reads the whole feature
+table, builds the supervised set, splits it chronologically, scores the
+persistence baseline by simply reading the anchor column, fits the three learned
+candidates, and selects the challenger by validation RMSE.
+
+The candidate configurations are fixed rather than searched, because a nightly
+unattended job that performs a hyper-parameter search is both slower and less
+reproducible than one that does not, and because the measured gap between the
+families is far larger than the gap between plausible configurations within a
+family. The gradient-boosted candidate uses 600 trees at a learning rate of 0.05,
+a maximum depth of 8, and row and column subsampling at 0.8 with the histogram
+tree method; the forest uses 120 trees at a maximum depth of 16 with a minimum
+leaf size of 10; the linear candidate is a standardised Ridge regression. Every
+candidate has a fixed random seed, satisfying NFR-7.
+
+Prediction intervals are fitted immediately after selection, on the same
+validation window, by grouping the residuals by horizon and taking the tenth and
+ninetieth percentiles within each group, as Figure~\ref{fig:code-interval} shows.
+
+\begin{figure}[htbp]\centering
+\begin{lstlisting}[language=Python]
+valid["pred"]  = best.predict(X_va)
+valid["resid"] = valid[TARGET_COLUMN] - valid["pred"]
+interval_by_horizon = {
+    int(h): [float(g["resid"].quantile(0.1)),
+             float(g["resid"].quantile(0.9))]
+    for h, g in valid.groupby("horizon")
+}
+\end{lstlisting}
+\codegap
+\caption{Per-horizon empirical residual quantiles, giving an 80\% prediction
+interval that widens with lead time.}
+\label{fig:code-interval}
+\end{figure}
+
+Everything inference needs is then packaged into a single bundle: the fitted
+estimator, the exact feature column order, the modelled horizons, the interval
+table, the metrics of every candidate, the winning family's name and the training
+timestamp. Shipping the column order with the estimator rather than relying on
+both sides importing the same constant is a small but deliberate guard against
+training-serving skew.
+
+\section{The Evaluation Suite}
+\label{sec:impl-evaluate}
+Evaluation is implemented as a separate module rather than inside the training
+pipeline, because it answers a different question. Training asks which candidate
+is best; evaluation asks how good the promoted model actually is, and at what
+lead time.
+
+Per-horizon metrics are computed by predicting once over the whole validation set
+and then masking by horizon, so that RMSE, MAE and $R^2$ are reported separately
+for each of the ten modelled lead times. The persistence baseline is scored under
+exactly the same mask, which is what makes the comparison meaningful: a claim to
+beat a baseline at 72 hours is only informative if the baseline was also
+evaluated at 72 hours.
+
+The walk-forward backtest uses an expanding-window time-series split with five
+folds. Each fold trains a fresh gradient-boosted model on the folds that precede
+it and tests on the fold that follows, so that every test window lies strictly in
+the future of its own training data. This is the construction that the
+literature~\cite{ref:tashman,ref:bergmeir} identifies as the honest estimate of
+forward performance, and it is deliberately more pessimistic than the single
+chronological split used for candidate selection, because each early fold is
+trained on far less data.
+
+The module writes four artefacts: two figures, a markdown report, and a JSON
+document that the API serves and the dashboard renders. Publishing the same
+numbers into a document that reaches the public interface, rather than into a log
+that only a developer reads, is what satisfies principle P6. The results
+themselves are presented in Chapter~\ref{ch:testing}.
+
+\section{The Champion-Challenger Gate}
+\label{sec:impl-gate}
+The gate is the component that turns a retraining script into a governed system.
+Figure~\ref{fig:gate} illustrates it, and Figure~\ref{fig:code-gate} shows the
+rule.
+
+\fig{champion-challenger}{0.92}{The promotion gate. Both outcomes are recorded;
+the leaderboard rows are the system's actual history.}{fig:gate}
+
+\begin{figure}[htbp]\centering
+\begin{lstlisting}[language=Python]
+PROMOTION_MARGIN = 0.0   # 0 = any improvement promotes; a tie does NOT
+
+champion   = current_champion(entries)
+challenger = candidates[best_name]
+version    = max((e.get("version", 0) for e in entries),
+                 default=0) + 1
+
+promoted = champion is None or \
+           challenger["rmse"] < champion["rmse"] - PROMOTION_MARGIN
+if promoted:
+    for e in entries:            # demote the previous champion
+        e["is_champion"] = False
+\end{lstlisting}
+\codegap
+\caption{The promotion rule. Strict inequality means an exact tie keeps the
+incumbent.}
+\label{fig:code-gate}
+\end{figure}
+
+Three details are worth drawing out. The comparison is a strict inequality, so a
+challenger that merely matches the champion is refused; a model does not ship
+because it is newer. The first ever run is promoted unconditionally, because
+there is no incumbent to beat. And every run appends an entry recording not only
+the winner but the metrics of every candidate considered, the previous champion's
+score and the decision - so the leaderboard is an audit trail rather than a
+scoreboard.
+
+The gate's behaviour in production, shown in the lower half of
+Figure~\ref{fig:gate}, is the clearest demonstration that it works. Version~1 was
+promoted at an RMSE of 20.597 as the first champion. Version~2, trained after the
+full historical backfill had completed, reached 19.687 and displaced it.
+Version~3, trained an hour later on effectively identical data, reached the same
+19.687 - and was \emph{refused}, because 19.687 is not less than 19.687. That
+refusal is the system declining to churn its own production model for no gain.
+
+Only if the gate promotes is the bundle written, and the write goes to two places:
+a local file for use within the same job, and the durable model registry. The
+registry is what satisfies principle P1. A model saved only to the runner's disk
+ceases to exist minutes later; a model registered with its metrics can be
+retrieved by any later job, including a deployed backend that was never present
+when training happened. Retrieval asks the registry for the version with the
+lowest RMSE, which makes ``the champion'' a property of the stored metrics rather
+than of a mutable pointer that could drift out of step.
+
+\section{The Model Layer and the Sequence-Model Study}
+The registry facade presents one pair of operations - save and load - and hides
+which backend answers them, preferring the durable registry and falling back to
+the local bundle. This is what allows the identical inference code to run on a
+continuous-integration runner that has a registry credential and inside a
+deployment container that deliberately has neither the credential nor the client.
+
+Alongside the production model, a recurrent network was implemented to test the
+assumption that a sequence model would do better. It consumes 48 hours of
+pollution and weather history for a city as a sequence and predicts the index 24
+hours ahead, through two stacked LSTM layers followed by a dense head with
+dropout, trained with early stopping on a chronological validation split.
+Sequences are built per city with a stride, windows containing missing values are
+discarded, and scaling is fitted on the training portion only so that no
+validation statistic leaks backwards.
+
+The comparison was made fair deliberately: the same task, the same split, the same
+metric, and the same persistence baseline. The results are reported in
+Chapter~\ref{ch:testing}; the outcome was that the sequence model is genuinely
+competitive at the single horizon it was built for and was nonetheless not
+promoted, for reasons of coverage, cost and explainability that
+Chapter~\ref{ch:testing} sets out. The module remains in the repository as
+evidence, and is excluded from the deployment image so that its dependency never
+reaches production.
+
+\section{The Inference Pipeline}
+\label{sec:impl-inference}
+Inference loads the champion once and then processes each city independently. For
+a city it fetches the past three days and the next four days in a single request,
+engineers features over the combined series - so that the anchor's rolling
+statistics are computed from real history rather than being unavailable - and
+splits the result at the current hour. The last row at or before now becomes the
+anchor; the first 72 rows after now become the targets.
+
+The model input matrix is then assembled column by column: target-time features
+from the future rows, anchor-state features broadcast from the single anchor row,
+and a horizon column computed as the whole number of hours between each future row
+and now. The matrix is reordered to the bundle's stored column order before
+prediction, which is the guard against skew mentioned earlier.
+Figure~\ref{fig:code-infer} shows the assembly.
+
+\begin{figure}[htbp]\centering
+\begin{lstlisting}[language=Python]
+X = pd.DataFrame(index=future.index)
+for col in TARGET_TIME_FEATURES:      # forecast weather + calendar at tau
+    X[col] = future[col].values
+for col in ANCHOR_STATE_FEATURES:     # observed state now, broadcast
+    X[f"{col}_anchor"] = anchor[col]
+X["horizon"] = ((future["datetime"] - now) / pd.Timedelta("1h")) \
+                 .round().astype(int).values
+X = X[bundle.feature_columns]         # exact training column order
+preds = bundle.estimator.predict(X)
+\end{lstlisting}
+\codegap
+\caption{Assembling 72 model inputs for one city from one anchor row and 72
+future rows.}
+\label{fig:code-infer}
+\end{figure}
+
+Each prediction is then widened by the residual quantiles stored for its horizon,
+clipped to the valid index range, and labelled with its health category; the
+hourly series is aggregated into three calendar days; the alert module scans the
+curve; and the peak hour is explained. Every city is wrapped in an exception
+handler, so one city's failure costs one city.
+
+The whole payload is written as a single document and, separately, every forecast
+point is appended to the forecast log for later scoring. Both the explanation and
+the logging steps are wrapped so that their failure cannot prevent the forecast
+from being published, in accordance with principle P5.
+
+\section{Explainability}
+\label{sec:impl-shap}
+Explanation uses TreeSHAP~\cite{ref:treeshap} against the champion estimator. For
+a single input row it computes the exact Shapley values, takes the model's base
+value, and reports the five largest contributions by absolute magnitude. Because
+the attribution is additive, the base value plus the sum of all contributions is
+exactly the prediction, which means the explanation can be phrased arithmetically
+rather than as a bare ranking.
+
+Two implementation choices make the output usable by a non-specialist. The
+explainer is cached across calls within a process, since constructing it is the
+expensive part and inference explains 22 cities in one job. And every feature name
+is mapped through a dictionary of human-readable labels, so that
+\texttt{aqi\_roll\_mean\_6h\_anchor} is presented as ``6h AQI trend'' and
+\texttt{apparent\_temperature} as ``feels-like temp''.
+Figure~\ref{fig:code-shap} shows the rendering, and the sentence it produced for
+Lahore in the live system is visible in the dashboard screenshot in
+Chapter~\ref{ch:ui}: \emph{``Forecast AQI $\approx$ 200 (baseline 132). Main
+drivers: current AQI +26.0, time of day +13.4, season $-$6.6, 6h AQI trend +6.4,
+temperature +5.0.''}
+
+\begin{figure}[htbp]\centering
+\begin{lstlisting}[language=Python]
+shap_vals = np.asarray(explainer.shap_values(X))[0]
+base = float(np.ravel(explainer.expected_value)[0])
+pred = base + float(shap_vals.sum())   # additive: this is exact
+
+order = np.argsort(np.abs(shap_vals))[::-1][:top_k]
+contributors = [
+    {"label": friendly(bundle.feature_columns[i]),
+     "impact": round(float(shap_vals[i]), 1)} for i in order]
+parts = [f"{c['label']} {'+' if c['impact'] >= 0 else '-'}"
+         f"{abs(c['impact'])}" for c in contributors]
+text = (f"Forecast AQI ~ {round(pred)} (baseline {round(base)}). "
+        f"Main drivers: " + ", ".join(parts) + ".")
+\end{lstlisting}
+\codegap
+\caption{Rendering Shapley attributions as a plain-language sentence. Additivity
+is what allows the numbers to be stated arithmetically.}
+\label{fig:code-shap}
+\end{figure}
+
+A global view is produced separately by averaging absolute Shapley values over a
+sample and plotting the leading features; the resulting ranking is reported in
+Chapter~\ref{ch:testing}.
+
+\section{The What-If Simulator}
+\label{sec:impl-whatif}
+The simulator exposes five drivers: current particulate concentration, current
+index, wind speed, humidity and temperature. It first builds the model input for
+the selected city at a lead time of 24 hours from live data, and returns the
+current real value of each driver, so that the interface's sliders begin at
+reality rather than at an arbitrary midpoint. The user's overrides are then mapped
+onto the underlying feature columns and the model is called twice, once
+unmodified and once overridden, and both values are returned with their health
+categories and the difference between them.
+
+The mapping deserves comment because it is where the simulator earns its
+plausibility. Overriding the current index sets not only the anchor index but also
+the 6-hour and 24-hour anchor means, since a stated current level that contradicts
+its own recent history would place the model far outside its training
+distribution. Overriding the wind speed rescales both wind vector components so
+that their resultant matches the requested speed while preserving direction, and
+adjusts the gust feature proportionally. Overriding the temperature adjusts the
+apparent temperature with it. Each of these keeps the perturbed row internally
+consistent, which is what makes the response interpretable.
+
+The simulator is labelled in the interface as a model simulation rather than
+causal evidence, in accordance with NFR-6. What it shows is how \emph{this model}
+responds to a change in its inputs, which is a genuine and useful statement about
+the model, and not a claim about what would physically happen.
+
+\section{Monitoring}
+\label{sec:impl-monitoring}
+Monitoring implements the design of Chapter~\ref{ch:design} in two halves, shown
+in Figure~\ref{fig:monitoring}.
+
+\fig{monitoring}{1.0}{The two monitoring signals and why they are read
+together.}{fig:monitoring}
+
+The drift half divides the feature history at fourteen days before the latest
+observation, treats everything older as the reference and everything newer as the
+current window, and computes the Population Stability Index per monitored feature.
+The implementation, in Figure~\ref{fig:code-psi}, takes the bin edges from
+deciles of the reference distribution, deduplicates them so that a degenerate
+distribution cannot produce empty bins, replaces the outer edges with infinities
+so that new extreme values fall inside the outermost bins rather than being
+dropped, and adds a small constant to every proportion so that an empty bin
+cannot produce an infinite logarithm. It returns zero rather than a spurious
+value when either window is too small to support the estimate.
+
+\begin{figure}[htbp]\centering
+\begin{lstlisting}[language=Python]
+def population_stability_index(ref, cur, bins: int = 10) -> float:
+    """PSI: <0.1 stable, 0.1-0.25 moderate, >0.25 significant."""
+    ref, cur = ref.dropna(), cur.dropna()
+    if len(ref) < 50 or len(cur) < 20:
+        return 0.0
+    edges = np.unique(np.quantile(ref, np.linspace(0, 1, bins + 1)))
+    if len(edges) < 3:
+        return 0.0
+    edges[0], edges[-1] = -np.inf, np.inf   # absorb unseen extremes
+    ref_pct = np.histogram(ref, edges)[0] / len(ref) + 1e-6
+    cur_pct = np.histogram(cur, edges)[0] / len(cur) + 1e-6
+    return float(np.sum((cur_pct - ref_pct)
+                        * np.log(cur_pct / ref_pct)))
+\end{lstlisting}
+\codegap
+\caption{The Population Stability Index, with the guards that keep it defined on
+real data.}
+\label{fig:code-psi}
+\end{figure}
+
+The error half appends every issued forecast to a columnar log, deduplicated
+on the triple of issue time, city and target hour, and later joins that log to the
+observed index on city and target hour. Only rows for which reality has arrived
+can be scored, so the report distinguishes between having no forecasts logged,
+having forecasts logged but no matured outcomes, and having a real score -
+rather than reporting a misleading zero in any of those cases.
+
+Both halves are written to a committed document each night, which is what allows
+the deployed backend to serve the monitoring tab without any live feature-store
+connection.
+
+\section{Alerting}
+The alerting module scans a city's hourly forecast and produces a graded alert.
+Two thresholds are used, aligned with the EPA category boundaries: 150, the start
+of the \emph{unhealthy} band, raises a warning, and 200, the start of \emph{very
+unhealthy}, raises a danger. The alert records the peak value, the hour of the
+peak, the category and its standard advice, and - the field that makes it
+actionable - the first hour at which the curve crosses the warning threshold, so
+a user is told when the episode begins rather than only how bad it will get.
+
+\section{The API}
+The backend exposes the endpoints listed in Table~\ref{tab:api}. Its structure
+follows the design rule that document reads and model invocations are separate.
+Document endpoints read a committed file and are cheap; the model is loaded lazily
+and only by the endpoints that genuinely need it, so a deployment that never
+receives a what-if request never loads the estimator at all.
+
+The monitoring endpoint illustrates the layered error handling of principle P5 in
+its final form. It first serves the committed snapshot; failing that it attempts
+to compute the report live; failing that it returns a well-formed placeholder
+explaining that monitoring runs in the training pipeline and a snapshot will
+appear after the next run. The tab therefore reports its own state honestly and
+never presents an error to a member of the public.
+
+Cross-origin requests are permitted because the frontend is served from a
+different origin and every endpoint is a read of public data. The advisor endpoint
+checks for its credential before attempting anything and returns a specific,
+actionable message when it is absent, rather than failing obscurely inside the
+client library.
+
+\section{The Advisor and the Tool Server}
+The advisor answers natural-language questions by tool use rather than by recall.
+Four functions are declared to the model with JSON schemas: list the supported
+cities, get a city's current index and three-day forecast with its alert, get a
+city's long-run historical statistics, and explain why a city's forecast is high
+or low. The model is invited to call them; the backend executes the call against
+the real forecast document and returns the result; the loop repeats up to a
+bounded number of rounds until the model produces a final answer. The system
+prompt instructs the model to ground every number in a tool call and to answer
+with practical health guidance - who is at risk, whether to limit outdoor
+exertion, whether a mask is warranted, and when the cleanest part of the day is.
+
+The same four functions are published over the Model Context
+Protocol~\cite{ref:mcp} by a small server module, so that an external protocol
+client can query Pakistani air quality through exactly the same code path that
+serves the dashboard's advisor. Sharing the implementation rather than duplicating
+it is what guarantees the two cannot disagree.
+
+\section{Continuous Integration and Scheduling}
+\label{sec:impl-cicd}
+Three workflows constitute the compute plane.
+
+The \textbf{feature workflow} runs hourly at five minutes past, checks out the
+repository, installs the package, and runs the feature pipeline with the
+feature-store credentials injected from the secret store.
+
+The \textbf{training workflow} runs daily at 02:30~UTC and executes four steps in
+order: train, infer, evaluate and monitor, then commit the refreshed artefacts
+back to the repository. The evaluation and monitoring steps are permitted to fail
+without failing the workflow, since neither is required for a forecast to be
+served. The commit message carries a skip marker so that committing artefacts
+cannot trigger another run.
+
+The \textbf{backfill workflow} is manual, takes the history start date as an
+input, and is given a much longer time allowance.
+
+Two mechanisms keep these safe. The feature and backfill workflows share a
+concurrency group, so the scheduled hourly job and a long manual backfill can
+never write to the feature store simultaneously; and every workflow has an
+explicit timeout, so a stalled job cannot consume the free allowance indefinitely.
+
+The commit step is what closes the loop between the compute plane and the serving
+layer: the refreshed forecast, evaluation, monitoring and leaderboard documents
+become part of the repository, and are therefore present in the next deployment
+image and readable by the static frontend.
+
+\section{Deployment}
+\label{sec:impl-deploy}
+The deployment topology was shown in Figure~\ref{fig:deployment}.
+
+The backend is a container built from a slim Python base. Three details of the
+image were arrived at empirically. The OpenMP runtime is installed explicitly,
+because the gradient-boosting library fails at import time without it on a slim
+image. The dependency set is a reduced one that deliberately omits the
+feature-store client and the deep-learning framework, because the deployed API
+serves committed documents and a bundled model and needs neither; this reduces the
+image substantially. And the package is installed in editable mode, so that the
+project-root path derived in the configuration module resolves to the application
+directory where the committed documents and the model bundle actually live.
+
+The frontend is a static build served from an edge host. The backend's address is
+supplied by baking it into the build command rather than by setting a build-time
+environment variable, because the hosting platform rejects variables carrying the
+build tool's public prefix as potentially sensitive. Since the address is a public
+URL, baking it in is appropriate rather than a workaround. A rewrite rule directs
+every path to the application, so that the single-page router works on a direct
+navigation.
+
+\section{Challenges Encountered and Their Resolution}
+\label{sec:impl-challenges}
+Table~\ref{tab:challenges} records the substantive failures encountered during
+development, their root causes and their resolutions. Several of them shaped the
+design rather than merely being fixed, and they are the most transferable findings
+in this thesis, because they are what the free-tier, serverless constraint
+actually costs.
+
+\begin{xltabular}{\textwidth}{P{3.4cm} P{4.0cm} Y}
+\caption{Challenges encountered and their resolution.}\label{tab:challenges}\\
+\toprule
+\bfseries Challenge & \bfseries Root cause & \bfseries Resolution \\
+\midrule
+\endfirsthead
+\toprule
+\bfseries Challenge & \bfseries Root cause & \bfseries Resolution \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+Feature group could not be created & The platform's newer default table format
+requires a client library the base installation does not ship. & Created the
+group with the server-side materialised time-travel format, which preserves
+primary-key upserts. \\
+Materialisation job failed with an out-of-memory error & The statistics profiler
+ran over all 74 columns on a free-tier executor. & Disabled statistics on the
+feature group and created a fresh version; statistics are used only by the
+platform's interface and by no pipeline. \\
+Backfill froze at the tenth of 22 cities & A blocking insert waited indefinitely
+on a materialisation job stalled at initialisation, until the scheduler's time cap
+killed the run. & Made inserts non-blocking and wrote city by city; safe because
+writes are idempotent upserts and the resume is coverage-based. \\
+Backfill skipped cities that were not in fact loaded & The resume checked whether
+a city was \emph{present}, but the hourly pipeline had already seeded every city
+with recent rows. & Changed the resume to check whether a city's earliest stored
+observation reaches back to the requested start date. \\
+Training crashed in the chronological split & The feature store returns the event
+time column as strings, so a quantile over it was undefined. & Coerced to a
+datetime type on read and again inside the split, so the split is correct
+regardless of how the store returned the column. \\
+The champion and the leaderboard reset on every run & Both were being written to
+the runner's local directory, which is destroyed when the job ends. & Pushed the
+champion to the durable model registry and committed the leaderboard to the
+repository. \\
+The feature-store client could not be installed for local development & A
+transitive cryptographic dependency fails to build on the development platform. &
+Introduced the storage facade with an interchangeable local columnar backend;
+all feature-store work runs on Linux automation. \\
+The container build failed to start & The platform's default builder ignored the
+declared build configuration and no start command was inferred. & Added a
+Dockerfile, which the platform detects in preference and which gives explicit
+control of the base image, the system packages and the entry point. \\
+The deployed backend reported that no forecast was available & The deployment
+tool honours the repository's ignore file, so the committed model bundle and data
+documents were excluded from the uploaded context. & Added explicit negations for
+those paths to the ignore file so that the required artefacts are shipped. \\
+The frontend could not be given the backend address & The hosting platform rejects
+build-time variables carrying the build tool's public prefix. & Baked the address
+into the build command in the platform configuration; the address is public, so
+this is appropriate rather than a compromise. \\
+The gradient-boosting library failed at import in the container & The slim base
+image lacks the OpenMP runtime. & Installed it explicitly in the image. \\
+The application resolved its data paths to the wrong directory in the container &
+An ordinary install placed the package in the interpreter's library directory, so
+the derived project root pointed away from the committed artefacts. & Installed
+the package in editable mode inside the image. \\
+\end{xltabular}
+
+\section{Summary of Implementation}
+This chapter described the construction of the system: the technology stack and
+its justification; the single configuration module; the retrying ingestion client;
+the EPA index implementation and its deliberate restriction to particulate
+species; the feature builder and the two mechanisms - shifted windows and
+per-city grouping - that prevent leakage; the multi-horizon supervised builder;
+the hourly, backfill, training and inference pipelines; the evaluation suite; the
+champion-challenger gate and the durable registry, including the refused tie that
+demonstrates the gate working; the model layer and the sequence-model study;
+explanation, simulation, monitoring and alerting; the API and its layered
+fallbacks; the advisor and the tool server; the three scheduled workflows; the
+container and static deployments; and the twelve substantive failures encountered
+along the way together with what each of them required. The next chapter presents
+the user interface through which all of this reaches a member of the public.

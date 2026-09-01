@@ -1,0 +1,59 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="_style.css"></head>
+<body><div id="canvas">
+<svg width="860" height="620" viewBox="0 0 860 620">
+  <defs>
+    <marker id="a" markerWidth="13" markerHeight="13" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#2C6FB5"/></marker>
+  </defs>
+  <text x="430" y="34" text-anchor="middle" class="t-title">Methodology - Iterative, Module-by-Module Lifecycle</text>
+
+  <!-- ring arrows -->
+  <path d="M520,132 L592,186" stroke="#2C6FB5" stroke-width="2.6" fill="none" marker-end="url(#a)"/>
+  <path d="M690,240 L690,350" stroke="#2C6FB5" stroke-width="2.6" fill="none" marker-end="url(#a)"/>
+  <path d="M598,420 L525,473" stroke="#2C6FB5" stroke-width="2.6" fill="none" marker-end="url(#a)"/>
+  <path d="M335,475 L263,421" stroke="#2C6FB5" stroke-width="2.6" fill="none" marker-end="url(#a)"/>
+  <path d="M170,350 L170,240" stroke="#2C6FB5" stroke-width="2.6" fill="none" marker-end="url(#a)"/>
+  <path d="M260,187 L332,133" stroke="#2C6FB5" stroke-width="2.6" fill="none" marker-end="url(#a)"/>
+
+  <circle cx="430" cy="305" r="98" fill="#F7FAFD" stroke="#1F3A5F" stroke-width="1.5" stroke-dasharray="4 4"/>
+  <text x="430" y="286" text-anchor="middle" class="t-h" style="fill:#1F3A5F">One module</text>
+  <text x="430" y="308" text-anchor="middle" class="t-s">per iteration, each</text>
+  <text x="430" y="326" text-anchor="middle" class="t-s">independently runnable</text>
+  <text x="430" y="344" text-anchor="middle" class="t-s">and testable</text>
+
+  <g>
+    <rect x="340" y="78" width="180" height="62" rx="10" fill="#1F3A5F"/>
+    <text x="430" y="105" text-anchor="middle" class="t-h" style="fill:#fff">1 &#183; Plan</text>
+    <text x="430" y="126" text-anchor="middle" class="t-s" style="fill:#cdd9e8">pick the next module, its risk</text>
+  </g>
+  <g>
+    <rect x="600" y="170" width="180" height="62" rx="10" fill="#2C6FB5"/>
+    <text x="690" y="197" text-anchor="middle" class="t-h" style="fill:#fff">2 &#183; Analyse</text>
+    <text x="690" y="218" text-anchor="middle" class="t-s" style="fill:#e3edf7">requirements, data contract</text>
+  </g>
+  <g>
+    <rect x="600" y="357" width="180" height="62" rx="10" fill="#2C6FB5"/>
+    <text x="690" y="384" text-anchor="middle" class="t-h" style="fill:#fff">3 &#183; Design</text>
+    <text x="690" y="405" text-anchor="middle" class="t-s" style="fill:#e3edf7">interfaces before code</text>
+  </g>
+  <g>
+    <rect x="340" y="469" width="180" height="62" rx="10" fill="#256f6f"/>
+    <text x="430" y="496" text-anchor="middle" class="t-h" style="fill:#fff">4 &#183; Build</text>
+    <text x="430" y="517" text-anchor="middle" class="t-s" style="fill:#cfe6e6">implement the module</text>
+  </g>
+  <g>
+    <rect x="80" y="357" width="180" height="62" rx="10" fill="#256f6f"/>
+    <text x="170" y="380" text-anchor="middle" class="t-h" style="fill:#fff">5 &#183; Test and</text>
+    <text x="170" y="399" text-anchor="middle" class="t-h" style="fill:#fff">integrate</text>
+    <text x="170" y="417" text-anchor="middle" class="t-s" style="fill:#cfe6e6">unit tests, then a live run</text>
+  </g>
+  <g>
+    <rect x="80" y="170" width="180" height="62" rx="10" fill="#1F3A5F"/>
+    <text x="170" y="197" text-anchor="middle" class="t-h" style="fill:#fff">6 &#183; Observe</text>
+    <text x="170" y="218" text-anchor="middle" class="t-s" style="fill:#cdd9e8">failures feed the next plan</text>
+  </g>
+
+  <rect x="40" y="552" width="780" height="52" rx="10" fill="#EEF4FA" stroke="#B9C6D6"/>
+  <text x="430" y="576" text-anchor="middle" class="t-s">Modules delivered in order: environment and configuration &#8594; feature pipeline &#8594; historical backfill &#8594; exploratory analysis &#8594; model training &#8594;</text>
+  <text x="430" y="594" text-anchor="middle" class="t-s">sequence-model study &#8594; explainability &#8594; dashboard and API &#8594; alerting &#8594; continuous integration &#8594; MLOps differentiators &#8594; deployment.</text>
+</svg>
+</div></body></html>

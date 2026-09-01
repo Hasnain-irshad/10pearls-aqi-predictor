@@ -1,0 +1,16 @@
+/* Shared design tokens for all thesis diagrams (referenced inline per file). */
+:root{
+  --navy:#1F3A5F; --accent:#2C6FB5; --teal:#2E8B8B; --amber:#C8881A;
+  --rose:#B5485B; --ink:#23303F; --muted:#5C6B7A; --line:#B9C6D6;
+  --fill:#EEF4FA; --fill2:#E3ECF6; --white:#ffffff; --green:#2E7D52;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#fff}
+#canvas{display:inline-block;background:#fff;padding:26px;font-family:'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif}
+svg{display:block}
+text{fill:var(--ink);font-family:'Segoe UI',Roboto,Arial,sans-serif}
+.t-title{font-size:19px;font-weight:700;fill:var(--navy)}
+.t-h{font-size:15px;font-weight:700}
+.t-b{font-size:13px}
+.t-s{font-size:11.5px;fill:var(--muted)}
+.t-mono{font-family:'Consolas','Courier New',monospace;font-size:12px}

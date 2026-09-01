@@ -1,0 +1,117 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="_style.css"></head>
+<body><div id="canvas">
+<svg width="1000" height="700" viewBox="0 0 1000 700">
+  <text x="500" y="32" text-anchor="middle" class="t-title">Use Case Diagram</text>
+
+  <!-- system boundary -->
+  <rect x="250" y="60" width="500" height="596" rx="12" fill="#F7FAFD" stroke="#1F3A5F" stroke-width="2"/>
+  <text x="500" y="86" text-anchor="middle" class="t-h">Pearls AQI Predictor</text>
+
+  <!-- actors: resident -->
+  <g>
+    <circle cx="112" cy="150" r="16" fill="none" stroke="#1F3A5F" stroke-width="2"/>
+    <line x1="112" y1="166" x2="112" y2="208" stroke="#1F3A5F" stroke-width="2"/>
+    <line x1="86" y1="180" x2="138" y2="180" stroke="#1F3A5F" stroke-width="2"/>
+    <line x1="112" y1="208" x2="92" y2="240" stroke="#1F3A5F" stroke-width="2"/>
+    <line x1="112" y1="208" x2="132" y2="240" stroke="#1F3A5F" stroke-width="2"/>
+    <text x="112" y="264" text-anchor="middle" class="t-h">Resident</text>
+    <text x="112" y="284" text-anchor="middle" class="t-s">a member of the public</text>
+    <text x="112" y="302" text-anchor="middle" class="t-s">in one of the 22 cities</text>
+  </g>
+
+  <!-- actor: analyst -->
+  <g>
+    <circle cx="112" cy="440" r="16" fill="none" stroke="#256f6f" stroke-width="2"/>
+    <line x1="112" y1="456" x2="112" y2="498" stroke="#256f6f" stroke-width="2"/>
+    <line x1="86" y1="470" x2="138" y2="470" stroke="#256f6f" stroke-width="2"/>
+    <line x1="112" y1="498" x2="92" y2="530" stroke="#256f6f" stroke-width="2"/>
+    <line x1="112" y1="498" x2="132" y2="530" stroke="#256f6f" stroke-width="2"/>
+    <text x="112" y="554" text-anchor="middle" class="t-h">Analyst</text>
+    <text x="112" y="574" text-anchor="middle" class="t-s">operator of the system</text>
+  </g>
+
+  <!-- actor: scheduler -->
+  <g>
+    <rect x="856" y="392" width="120" height="56" rx="8" fill="#FBEEDF" stroke="#C8881A" stroke-width="2"/>
+    <text x="916" y="416" text-anchor="middle" class="t-h" fill="#8a5e12">Scheduler</text>
+    <text x="916" y="436" text-anchor="middle" class="t-s">GitHub Actions</text>
+    <text x="916" y="468" text-anchor="middle" class="t-s">&#171;system actor&#187;</text>
+  </g>
+
+  <!-- actor: open-meteo -->
+  <g>
+    <rect x="856" y="140" width="120" height="56" rx="8" fill="#FBEEDF" stroke="#C8881A" stroke-width="2"/>
+    <text x="916" y="164" text-anchor="middle" class="t-h" fill="#8a5e12">Open-Meteo</text>
+    <text x="916" y="184" text-anchor="middle" class="t-s">data provider</text>
+    <text x="916" y="216" text-anchor="middle" class="t-s">&#171;external system&#187;</text>
+  </g>
+
+  <!-- use cases -->
+  <ellipse cx="420" cy="132" rx="132" ry="30" fill="#EEF4FA" stroke="#2C6FB5" stroke-width="1.6"/>
+  <text x="420" y="138" text-anchor="middle" class="t-b">View the 3-day forecast</text>
+
+  <ellipse cx="420" cy="200" rx="132" ry="30" fill="#EEF4FA" stroke="#2C6FB5" stroke-width="1.6"/>
+  <text x="420" y="206" text-anchor="middle" class="t-b">Compare cities on the map</text>
+
+  <ellipse cx="420" cy="268" rx="132" ry="30" fill="#EEF4FA" stroke="#2C6FB5" stroke-width="1.6"/>
+  <text x="420" y="266" text-anchor="middle" class="t-b">Read why the forecast</text>
+  <text x="420" y="284" text-anchor="middle" class="t-b">is high or low</text>
+
+  <ellipse cx="420" cy="336" rx="132" ry="30" fill="#EEF4FA" stroke="#2C6FB5" stroke-width="1.6"/>
+  <text x="420" y="342" text-anchor="middle" class="t-b">Ask the advisor a question</text>
+
+  <ellipse cx="420" cy="404" rx="132" ry="30" fill="#EEF4FA" stroke="#2C6FB5" stroke-width="1.6"/>
+  <text x="420" y="410" text-anchor="middle" class="t-b">Run a what-if scenario</text>
+
+  <ellipse cx="620" cy="472" rx="118" ry="30" fill="#E6F2EC" stroke="#2E7D52" stroke-width="1.6"/>
+  <text x="620" y="478" text-anchor="middle" class="t-b">Inspect the leaderboard</text>
+
+  <ellipse cx="620" cy="540" rx="118" ry="30" fill="#E6F2EC" stroke="#2E7D52" stroke-width="1.6"/>
+  <text x="620" y="538" text-anchor="middle" class="t-b">Review accuracy by</text>
+  <text x="620" y="556" text-anchor="middle" class="t-b">forecast horizon</text>
+
+  <ellipse cx="620" cy="608" rx="118" ry="30" fill="#E6F2EC" stroke="#2E7D52" stroke-width="1.6"/>
+  <text x="620" y="614" text-anchor="middle" class="t-b">Check drift and error</text>
+
+  <ellipse cx="700" cy="132" rx="94" ry="28" fill="#FFF6E8" stroke="#C8881A" stroke-width="1.6"/>
+  <text x="700" y="130" text-anchor="middle" class="t-b">Ingest observations</text>
+  <text x="700" y="146" text-anchor="middle" class="t-s">hourly</text>
+
+  <ellipse cx="700" cy="212" rx="94" ry="28" fill="#FFF6E8" stroke="#C8881A" stroke-width="1.6"/>
+  <text x="700" y="210" text-anchor="middle" class="t-b">Retrain and gate</text>
+  <text x="700" y="226" text-anchor="middle" class="t-s">daily</text>
+
+  <ellipse cx="700" cy="292" rx="94" ry="28" fill="#FFF6E8" stroke="#C8881A" stroke-width="1.6"/>
+  <text x="700" y="290" text-anchor="middle" class="t-b">Refresh forecasts</text>
+  <text x="700" y="306" text-anchor="middle" class="t-s">after each retrain</text>
+
+  <ellipse cx="700" cy="372" rx="94" ry="28" fill="#FFF6E8" stroke="#C8881A" stroke-width="1.6"/>
+  <text x="700" y="370" text-anchor="middle" class="t-b">Raise a hazard alert</text>
+  <text x="700" y="386" text-anchor="middle" class="t-s">when AQI is unhealthy</text>
+
+  <!-- associations: resident -->
+  <line x1="150" y1="200" x2="290" y2="140" stroke="#5C6B7A"/>
+  <line x1="150" y1="210" x2="290" y2="200" stroke="#5C6B7A"/>
+  <line x1="150" y1="222" x2="290" y2="264" stroke="#5C6B7A"/>
+  <line x1="150" y1="234" x2="290" y2="332" stroke="#5C6B7A"/>
+  <line x1="150" y1="246" x2="290" y2="400" stroke="#5C6B7A"/>
+
+  <!-- associations: analyst -->
+  <line x1="150" y1="452" x2="290" y2="412" stroke="#256f6f"/>
+  <line x1="150" y1="462" x2="502" y2="472" stroke="#256f6f"/>
+  <line x1="150" y1="474" x2="502" y2="540" stroke="#256f6f"/>
+  <line x1="150" y1="486" x2="502" y2="606" stroke="#256f6f"/>
+
+  <!-- associations: scheduler -->
+  <line x1="852" y1="404" x2="794" y2="372" stroke="#C8881A"/>
+  <line x1="852" y1="400" x2="794" y2="296" stroke="#C8881A"/>
+  <line x1="852" y1="396" x2="794" y2="216" stroke="#C8881A"/>
+  <line x1="852" y1="392" x2="794" y2="140" stroke="#C8881A"/>
+
+  <!-- associations: open-meteo -->
+  <line x1="852" y1="168" x2="794" y2="140" stroke="#C8881A" stroke-dasharray="4 3"/>
+  <line x1="852" y1="176" x2="794" y2="290" stroke="#C8881A" stroke-dasharray="4 3"/>
+
+  <text x="500" y="678" text-anchor="middle" class="t-s">Blue cases are public, green cases are operational, amber cases are automated and run without any human present.</text>
+</svg>
+</div></body></html>

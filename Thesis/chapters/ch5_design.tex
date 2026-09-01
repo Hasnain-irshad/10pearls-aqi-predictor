@@ -1,0 +1,582 @@
+\chapter{Design and Architecture}
+\label{ch:design}
+
+\section{Introduction}
+This chapter presents the design of the \projname. It begins with the principles
+that governed every subsequent decision, then presents the system architecture
+and the alternatives that were considered and rejected. It decomposes the system
+into modules, specifies the data design, reports the exploratory analysis that
+informed the modelling choices, and then develops in turn the four design
+decisions that give the system its character: the feature representation and its
+leakage discipline, the horizon-as-feature formulation, the construction of
+prediction intervals, and the promotion gate. It closes with the communication
+design, the error-handling strategy and the deployment view.
+
+\section{Design Principles}
+Six principles were adopted at the outset and applied consistently.
+
+\textbf{P1 - Durable state, disposable compute.} Every machine that runs this
+system is destroyed minutes after it starts. The design therefore treats compute
+as worthless and state as precious: nothing of value may remain on a runner when
+a job ends. This principle is what forces a genuine model registry rather than a
+saved file on disk, and it is the reason the architecture can be free.
+
+\textbf{P2 - Decoupling through shared state, not through calls.} No pipeline
+invokes another. Their only contract is the feature store and the model registry.
+The consequence is that any pipeline can fail, be re-run, be rescheduled or be
+rewritten without the others being affected, and that a partial system is still a
+working system: if training fails tonight, yesterday's champion continues to
+serve.
+
+\textbf{P3 - The past may never see the future.} Every feature attached to time
+$t$ must contain only information that existed at $t$; every train-validation
+split must be chronological; every rolling statistic must be shifted so that it
+ends before the current observation; and no lag may cross a city boundary. This
+principle is enforced by construction and verified by unit tests, because target
+leakage produces a model that scores beautifully and then fails in production,
+and the failure is not visible in the metrics that would normally be trusted.
+
+\textbf{P4 - Nothing ships without proving it is better.} An automated pipeline
+that retrains nightly will otherwise deploy whatever it happened to produce.
+Promotion is therefore gated on a measured improvement over the incumbent, and
+every decision - including every refusal - is recorded.
+
+\textbf{P5 - Auxiliary capability must never break the primary one.}
+Explanation, monitoring and forecast logging are valuable but subordinate. Each
+is wrapped so that its failure is logged and the forecast is still published. A
+system that refuses to forecast because it could not explain itself is worse than
+one that forecasts without an explanation.
+
+\textbf{P6 - Publish the working.} Accuracy per horizon, the backtest, the
+promotion history and the current drift status are part of the product, not
+internal diagnostics. They appear in the same interface as the forecast, because
+a public-health signal that cannot be checked will not be trusted.
+
+\section{System Architecture}
+The architecture, shown in Figure~\ref{fig:arch}, is an instance of the
+Feature-Training-Inference pattern~\cite{ref:fti}. It divides into three
+planes.
+
+\fig{architecture}{1.0}{The system architecture: a source plane, a disposable
+compute plane, a durable state plane, and the serving layer beneath
+them.}{fig:arch}
+
+The \textbf{source plane} is a single free, keyless provider~\cite{ref:openmeteo}
+supplying three endpoints: an air-quality endpoint that serves both history and
+forecast, a weather forecast endpoint, and a weather archive endpoint derived
+from the ERA5 reanalysis~\cite{ref:era5}. The choice of a keyless provider was
+not incidental. Because there is no credential to manage, the scheduled workflows
+need no secret for ingestion, which removes an entire class of operational
+failure.
+
+The \textbf{compute plane} consists of scheduled, ephemeral jobs: the hourly
+feature pipeline, the daily training pipeline, the batch inference pipeline that
+follows it, the evaluation and monitoring steps, and a manually triggered
+backfill. None of them holds state between runs.
+
+The \textbf{state plane} is a managed feature store and model registry. The
+feature store holds one feature group keyed on city and timestamp; the registry
+holds versioned model bundles tagged with their metrics. Together they are the
+sole interface between the pipelines.
+
+The \textbf{serving layer} consists of a container-hosted API, a statically hosted
+browser application, and a tool server that exposes the same data over a standard
+protocol. Crucially, the serving layer never invokes a pipeline: it reads
+documents that a pipeline has already produced.
+
+\subsection{Alternatives Considered}
+Three plausible alternative architectures were considered and rejected.
+
+\textbf{A monolithic scheduled script.} A single job that fetches, trains and
+predicts would be simpler to write and would need no feature store. It was
+rejected because it couples the schedules - ingestion must be hourly and
+training need only be daily - because a failure anywhere loses everything, and
+because it provides no mechanism for the trained model to outlive the run. It
+also reintroduces training-serving skew~\cite{ref:techdebt}, since the features
+used for prediction would be recomputed rather than read.
+
+\textbf{A live prediction service.} The model could be loaded into the API and
+invoked per request. This would allow any city and any horizon on demand. It was
+rejected as the primary path because it makes every page view depend on model
+inference, requires an always-on process sized for peak load, and reintroduces
+the possibility that a user-facing request fails because a model failed. A
+reduced form of it survives, however: the API exposes an on-demand endpoint for
+arbitrary coordinates and for what-if simulation, so the capability exists where
+it genuinely adds value without the whole product depending on it.
+
+\textbf{One model per city, or one model per horizon.} Both were rejected for the
+same reason - artefact proliferation. Twenty-two cities times ten horizons is 220
+models to train, version, register, explain and monitor, and each would be
+trained on a small slice of the available data. The global horizon-as-feature
+design developed in Section~\ref{sec:design-mh} achieves the same coverage with
+one artefact.
+
+\section{Module Decomposition}
+Figure~\ref{fig:component} shows the decomposition of the Python package into
+layers. Dependencies flow strictly downwards.
+
+\fig{component}{1.0}{Module decomposition. Arrows point from a module to the
+modules it depends on; no lower layer imports a higher one.}{fig:component}
+
+At the bottom sits the \textbf{data and configuration layer}. A single
+configuration module is the sole source of truth for the supported cities, the
+filesystem layout, the feature-store object names and the forecast horizon; every
+other module imports from it, so adding a city is a one-line change. The
+ingestion module wraps the three provider endpoints behind a retrying session.
+The index module implements the EPA breakpoints, categories and advisory text.
+The store module is a facade over two interchangeable backends, which is what
+satisfies NFR-10.
+
+Above it, the \textbf{feature layer} contains exactly two modules: one that turns
+raw observations into the engineered feature table, and one that turns the
+feature table into the multi-horizon supervised set and splits it chronologically.
+Keeping these separate matters, because the first is used by both the feature
+pipeline and the inference pipeline, while the second is used only by training
+and evaluation.
+
+The \textbf{model layer} contains the registry facade, the leaderboard and
+promotion gate, the evaluation suite, the explanation module, and the
+sequence-model study, which is deliberately isolated so that its heavy dependency
+never reaches the deployment image.
+
+The \textbf{observability layer} holds drift and error monitoring and the
+alerting rules, and the \textbf{serving layer} holds the API, the tool
+definitions, the advisor, the tool-protocol server and the what-if simulator. The
+tool definitions are shared: the advisor and the protocol server call the same
+four functions, so a question answered in the dashboard and the same question
+asked from an external client cannot disagree.
+
+\section{Data Design}
+\label{sec:design-data}
+Figure~\ref{fig:datadesign} specifies the data design.
+
+\fig{data-design}{1.0}{Data design: the feature group and its keys, the two
+interchangeable storage backends, the four published documents, and the structure
+of the forecast payload.}{fig:datadesign}
+
+\subsection{The Feature Group}
+All engineered features live in one feature group. Its \textbf{primary key} is
+the pair (city, timestamp), where timestamp is the observation hour expressed in
+epoch seconds; its \textbf{event time} is the corresponding datetime column. This
+choice is what makes ingestion idempotent: the hourly pipeline deliberately
+fetches the last seven days rather than the last hour, so that lag and rolling
+features for the newest observations have sufficient history, and the resulting
+overlap is absorbed by the upsert rather than producing duplicates. A failed run
+can therefore simply be repeated.
+
+Two configuration decisions were forced by the free tier and are documented here
+because they are design decisions rather than accidents. The table format is set
+to a time-travel format that materialises server-side, because the platform's
+default format requires a client library that the base installation does not
+ship. Statistics computation is disabled, because the profiler over a 74-column
+table exhausted the memory of the free-tier executor and failed the
+materialisation job; statistics are a convenience for the platform's own
+interface and are not read by any pipeline, so disabling them costs nothing and
+makes the job finish reliably.
+
+\subsection{The Storage Facade}
+Every pipeline addresses storage through one module exposing four operations:
+save features, read features, list which cities are present, and report the
+earliest date held per city. Two backends implement it. The managed feature store
+is selected whenever an API key is present; a local columnar store is used
+otherwise. Both hold the identical schema and honour the same primary key. This
+is a straightforward application of dependency inversion, and it earns its keep
+twice: it allows the entire pipeline to be developed and tested on a platform
+where the managed client cannot be installed, and it means the choice of vendor
+is confined to a single module.
+
+\subsection{Published Documents}
+The pipelines publish four documents, which are committed to the repository each
+night and are the only things the serving layer reads: the forecast payload, the
+evaluation report, the monitoring report and the leaderboard. Publishing them as
+committed files rather than as a live query is what allows the deployed backend
+to omit the feature-store dependency entirely, and what guarantees that a page
+view never waits for a model.
+
+The structure of the forecast payload is given in the lower half of
+Figure~\ref{fig:datadesign}. Each city carries its province and coordinates for
+the map, its current observed index and category, 72 hourly points each with a
+predicted value, interval bounds and a category, a three-day aggregation, an
+alert object, and an explanation object.
+
+\section{Exploratory Data Analysis}
+\label{sec:design-eda}
+Before any model was designed, the assembled dataset - 696,960 hourly rows
+across 22 cities from 1~January~2023 to August~2026 - was analysed. Five
+findings shaped the design.
+
+\subsection{The Cities Differ Enormously}
+Figure~\ref{fig:eda-city} ranks the cities by mean index over the whole record.
+Faisalabad is the most polluted at a mean of 156.9, marginally ahead of Lahore at
+151.5; Gilgit is the cleanest at 75.7. The spread is more than a factor of two.
+
+\fig{eda-city-ranking}{0.86}{Mean Air Quality Index by city over the full
+record.}{fig:eda-city}
+
+Two design consequences follow. First, five cities have a \emph{mean} above 140,
+which is to say that the typical condition in those cities is at or near the
+threshold the EPA calls unhealthy; a forecasting service for them is not a
+curiosity. Second, the fact that Faisalabad outranks Lahore is a direct argument
+for the multi-city scope of the project, since the city that receives essentially
+all of the public and academic attention is not in fact the worst affected.
+
+\subsection{Seasonality Is the Dominant Signal}
+Figure~\ref{fig:eda-season} shows the monthly profile. The winter peak is
+unmistakable: January is the worst month at a mean of 146.8, against 91.5 in
+April, the cleanest - a 60\% difference between the extremes of the year, and a
+winter-to-summer ratio of about 1.25. This is consistent with the meteorological
+mechanism of the smog season: temperature inversions that trap emissions under a
+shallow mixing layer.
+
+\fig{eda-seasonality}{0.86}{Monthly seasonality of the Air Quality Index. The
+winter smog season dominates the annual cycle.}{fig:eda-season}
+
+This finding produced two design decisions. It motivated the cyclical encoding of
+month, so that December and January are adjacent in feature space rather than
+maximally distant. And it established, before any model existed, that the system
+would experience severe recurring input drift twice a year - which is why drift
+monitoring was specified as a requirement and why its output is interpreted with
+the seasonal explanation in mind rather than treated as a fault.
+
+\subsection{There Is a Strong Diurnal Cycle}
+Figure~\ref{fig:eda-diurnal} shows the average profile across the hours of the
+day. The maximum falls in the evening, around 18:00 at a mean of 123.1, and the
+minimum in the morning, around 09:00 at 108.1 - a within-day swing of 15 index
+points, consistent with boundary-layer behaviour and the evening traffic peak.
+
+\fig{eda-diurnal}{0.86}{Average diurnal profile of the Air Quality
+Index.}{fig:eda-diurnal}
+
+This motivated the cyclical encoding of hour, and it also motivated an interface
+decision: because the within-day variation is large, an hourly view is genuinely
+useful to a user, not merely decorative, since it lets them identify a safer part
+of the day rather than writing off the day entirely.
+
+\subsection{Weather Is Informative but Not Individually Decisive}
+Figure~\ref{fig:eda-weather} shows the correlation of each weather variable with
+the index. The strongest single relationship is with surface pressure, at a
+correlation of about 0.32 - meaningful, but far from sufficient on its own.
+
+\fig{eda-weather-correlation}{0.86}{Correlation between weather variables and the
+Air Quality Index.}{fig:eda-weather}
+
+This is an argument for a non-linear model with interactions rather than a linear
+one. No single weather variable determines air quality; what matters is the
+combination - low wind together with high pressure and a cold night is the
+inversion signature - and that is precisely the kind of structure a tree ensemble
+captures and a linear model does not. The eventual gap between the Ridge and
+XGBoost candidates, reported in Chapter~\ref{ch:testing}, confirms this reading.
+
+\subsection{The Target Distribution Is Skewed}
+Figure~\ref{fig:eda-dist} shows the distribution of the index over the whole
+record: a long right tail, with the bulk of the mass in the moderate-to-unhealthy
+range and occasional excursions into the hazardous band.
+
+\fig{eda-aqi-distribution}{0.8}{Distribution of the Air Quality Index across the
+whole record.}{fig:eda-dist}
+
+The skew has an important consequence for the interval design: a symmetric
+Gaussian interval would be a poor description of the error, which motivated the
+use of empirical residual quantiles rather than a parametric interval.
+
+\section{Feature Design}
+Figure~\ref{fig:featureeng} specifies the transformation from raw observations to
+model inputs.
+
+\fig{feature-engineering}{1.0}{Feature design: 21 raw columns become a 74-column
+engineered table, from which a 27-input multi-horizon supervised set is
+assembled. The rule at the foot governs every step.}{fig:featureeng}
+
+\subsection{Feature Families}
+Four families of engineered feature are constructed, each for a stated reason.
+
+\emph{Cyclical calendar features.} Hour, month and day of week are each mapped to
+a sine and cosine pair. Encoding hour as the integer 23 places it maximally far
+from hour 0, which is false; the sine-cosine pair places them adjacent on a
+circle, which is true.
+
+\emph{Wind as a vector.} Wind direction is a bearing, so 359 degrees and 1 degree
+describe almost the same wind while differing maximally as numbers. Speed and
+bearing are therefore decomposed into orthogonal components, which the model can
+reason about linearly.
+
+\emph{Lagged values.} The index and both particulate species are lagged by 1, 3,
+6, 12 and 24 hours, since pollutant series are strongly autocorrelated and the
+24-hour lag additionally captures the diurnal cycle.
+
+\emph{Rolling statistics.} Mean, standard deviation and maximum over 6-hour and
+24-hour windows summarise recent level, volatility and peak.
+
+\subsection{The Leakage Discipline}
+Every rolling window is shifted by one observation before it is computed, so that
+it ends at the previous hour and can never include the current one. Every lag and
+rolling statistic is computed within a single city, by grouping before
+engineering, so that one city's history can never leak into another's. Both
+properties are asserted by unit tests: one checks that each city independently
+shows exactly 24 missing values in its 24-hour lag column, which can only be true
+if the groups were processed separately, and another checks that the anchor value
+at horizon $h$ equals the observed value $h$ steps earlier.
+
+\subsection{The Target}
+The target is the EPA index. Where the provider supplies its own correctly
+averaged index value, that is used directly; where it is missing, the index is
+computed from first principles from particulate matter. Gaseous pollutants are
+deliberately excluded from the computed fallback, because the EPA defines their
+breakpoints in volumetric mixing ratios while the provider reports mass
+concentrations, and applying one to the other without a molar-mass conversion
+inflates the sub-index absurdly. Since the index is the maximum over sub-indices,
+a single wrong sub-index would corrupt every affected row. The exclusion is
+tested explicitly.
+
+\section{Multi-Horizon Forecasting Design}
+\label{sec:design-mh}
+The central modelling decision is illustrated in Figure~\ref{fig:multihorizon}.
+
+\fig{multihorizon}{1.0}{Direct multi-horizon forecasting with the horizon as an
+input feature: one global model serves 22 cities and ten lead
+times.}{fig:multihorizon}
+
+\subsection{The Two Kinds of Input}
+A forecast issued at time $t$ for the hour $\tau = t + h$ can draw on two
+distinct kinds of information, and the design separates them explicitly.
+
+\emph{Target-time features} describe the hour being predicted and are known in
+advance: the weather at $\tau$, which is available as a forecast; the calendar at
+$\tau$, which is deterministic; and the location, which is fixed. There are 20 of
+these.
+
+\emph{Anchor-state features} describe the observed pollution at the moment the
+forecast is issued: the current index, the 6-hour and 24-hour index means, the
+recent index volatility, and the current particulate concentrations. There are
+six of these, and they are obtained by shifting each series by $h$, so that the
+row describing $\tau$ carries the state as it was $h$ hours earlier.
+
+The horizon $h$ itself is the twenty-seventh input. The model therefore learns
+\[
+\mathrm{AQI}(\tau) \;=\; f\big(\text{target-time features at } \tau,\;
+\text{anchor state at } \tau - h,\; h\big).
+\]
+
+\subsection{Why the Horizon Is a Feature}
+Making $h$ an input rather than training one model per horizon has four
+consequences, all favourable. There is one artefact to version, register, explain
+and monitor, rather than ten or 220. Every horizon is trained on the whole
+dataset rather than on a tenth of it, so the long horizons - which are the
+sparsest and the hardest - borrow strength from the short ones. The model learns
+how uncertainty grows with distance as a smooth function of $h$ rather than
+memorising ten unrelated mappings, so an unmodelled lead time can be served by
+interpolation. And unlike a recursive strategy~\cite{ref:multistep}, the model is
+never fed its own output, so errors do not compound across steps.
+
+The design also incurs an honest cost, which Chapter~\ref{ch:testing} quantifies:
+at training time the model sees the weather that actually occurred at $\tau$,
+whereas at inference it sees the forecast weather for $\tau$. The validation
+score is therefore a mild over-estimate of operational skill.
+
+\subsection{The Supervised Set and Its Split}
+Ten horizons - 1, 2, 3, 6, 12, 24, 36, 48, 60 and 72 hours - are materialised.
+Each observation therefore contributes up to ten supervised rows differing only
+in $h$ and in the target. The resulting set is subsampled to 200,000 rows with a
+fixed seed, which keeps a full four-candidate training run inside the scheduler's
+time limit while retaining ample data.
+
+The split is strictly chronological: the most recent fifth of the time range
+becomes validation, and everything before it becomes training. Random
+partitioning is not used at any point, in accordance with the
+literature~\cite{ref:bergmeir} and with principle P3.
+
+\section{Prediction Interval Design}
+\label{sec:design-intervals}
+A point forecast alone would violate NFR-4. Intervals are constructed in the
+spirit of split conformal prediction~\cite{ref:inductive,ref:leiconformal}: the
+model is fitted on the training window, its residuals are computed on the
+disjoint validation window, and the interval is formed from the empirical
+quantiles of those residuals.
+
+Two refinements are applied. The quantiles are computed \emph{per horizon}, so
+that the interval widens with lead time exactly as the model's real errors do; a
+single global interval would be far too wide at one hour and far too narrow at 72.
+And the quantiles are empirical rather than parametric, which respects the skew
+observed in Section~\ref{sec:design-eda} instead of assuming a symmetric error
+distribution. The tenth and ninetieth percentiles are used, giving a nominal 80\%
+interval. At inference the bounds are clipped to the valid index range, and a
+horizon that was not explicitly modelled takes the quantiles of the nearest
+modelled horizon.
+
+The construction's assumption - exchangeability between the calibration and
+deployment periods - is not strictly satisfied by a seasonal, non-stationary
+series, so the 80\% figure is a well-motivated estimate rather than a guarantee.
+Chapter~\ref{ch:testing} states this limitation explicitly rather than claiming
+coverage the construction does not earn.
+
+\section{Model Selection and Promotion Design}
+\label{sec:design-gate}
+Four candidate families are scored in every run: a persistence baseline, which
+predicts that the index at $t+h$ equals the index at $t$; a standardised Ridge
+regression; a random forest; and a gradient-boosted ensemble. The baseline is
+scored but is never eligible for promotion; its role is to establish that the
+learned models have skill at all~\cite{ref:fpp}. The linear model's role is
+diagnostic, since the gap between it and the ensembles measures how much of the
+relationship is non-linear.
+
+The best fitted candidate by validation RMSE becomes the challenger, and is
+promoted only if it improves on the reigning champion's validation RMSE. The
+comparison margin is zero, which means an exact tie is a refusal: a new model
+never ships merely because it is newer. Every run appends an entry to a
+persistent leaderboard recording the version, the timestamp, the winning family,
+its metrics, the metrics of every candidate considered, the previous champion's
+score and the decision. The design and its observed behaviour are developed in
+Section~\ref{sec:impl-gate}.
+
+\section{Monitoring Design}
+The monitoring design pairs two measurements that are individually insufficient.
+
+\emph{Input drift} is measured by the Population Stability Index over seven
+features - the index itself, both particulate species, temperature, humidity,
+wind speed and surface pressure - comparing the most recent fourteen days against
+everything older. Deciles of the reference distribution define the bins, and the
+conventional thresholds of 0.10 and 0.25 classify each feature as stable,
+moderate or significant. PSI is non-parametric, cheap, and computed per feature so
+that the responsible variable is named rather than merely alarmed about.
+
+\emph{Realised error} is measured directly. Every forecast point issued is
+appended to a log with the hour it was issued for; once the feature pipeline has
+ingested the observation for that hour, the log is joined to it on city and target
+hour, and MAE, RMSE and the five largest misses are computed over the joined rows.
+
+The pairing is the point. Input drift alone cannot distinguish a harmless
+seasonal transition from a genuine degradation, and for a system whose dominant
+signal is an annual cycle, a drift alarm is the expected condition for several
+months of the year. Realised error alone is a lagging indicator: it can only
+score a forecast once the future it described has arrived. Read together, they
+separate the two cases - drift with stable error is seasonality that the nightly
+retrain has absorbed; drift accompanied by rising error is decay.
+
+\section{Communication Design}
+The system exposes one HTTP interface, summarised in Table~\ref{tab:api}. Its
+design follows a single rule: endpoints that read a published document are cheap
+and always available, while endpoints that invoke the model are separate,
+explicitly labelled, and permitted to fail without affecting the others.
+
+\begin{xltabular}{\textwidth}{P{4.5cm} Q{1.6cm} Y}
+\caption{The HTTP interface.}\label{tab:api}\\
+\toprule
+\bfseries Endpoint & \bfseries Kind & \bfseries Purpose \\
+\midrule
+\endfirsthead
+\toprule
+\bfseries Endpoint & \bfseries Kind & \bfseries Purpose \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+/api/health & document & Liveness, and whether a forecast document is present. \\
+/api/categories & static & The six index categories, their bounds and their
+advisory text, for the legend. \\
+/api/cities & static & The supported cities with province and coordinates. \\
+/api/predictions & document & The complete forecast payload for every city. \\
+/api/predictions/\{city\} & document & One city's forecast. \\
+/api/leaderboard & document & The promotion history and the current champion. \\
+/api/evaluation & document & Per-horizon metrics and the walk-forward backtest. \\
+/api/monitoring & document & Drift status and realised forecast error. \\
+/api/explain/\{city\} & document & The stored attribution and its sentence. \\
+/api/predict & model & An on-demand forecast for an arbitrary coordinate pair. \\
+/api/whatif/defaults & model & Current real values for the scenario sliders. \\
+/api/whatif & model & Baseline versus scenario under overridden drivers. \\
+/api/chat & external & The grounded language-model advisor. \\
+\end{xltabular}
+
+The frontend is a single-page application that fetches these endpoints over
+HTTPS. Because the two are deployed to different origins, the API permits
+cross-origin requests; this is safe here because every endpoint is a read of
+public, non-sensitive data. When no backend address is configured at build time,
+the same frontend code reads committed snapshots shipped alongside the bundle and
+hides the two capabilities that genuinely require a live model, which is the
+graceful degradation required by NFR-11.
+
+Figure~\ref{fig:sequence} shows how these pieces interact over time, and makes
+the essential asymmetry visible: the left-hand portion is a scheduled batch job
+that may take minutes, while the right-hand portion is a file read that takes
+milliseconds, and nothing connects them except a document.
+
+\fig{sequence-inference}{1.0}{Sequence of a scheduled forecast refresh, followed
+by an independent dashboard request.}{fig:sequence}
+
+\section{Error Handling and Recovery Design}
+Failure is treated as ordinary rather than exceptional, and is handled
+differently at each layer.
+
+\emph{At the network boundary}, transient provider failures are retried
+automatically with exponential backoff on the status codes that indicate
+throttling or a temporary server fault. Without this, a single momentary error
+would fail an unattended hourly job.
+
+\emph{Within a multi-city loop}, a failure is contained. If one city's ingestion
+or forecast raises, the error is logged and the loop continues, so that
+twenty-one cities are still served rather than none. The backfill goes further
+and writes each city as it completes, so an interruption loses at most one city's
+work.
+
+\emph{At the storage boundary}, writes are idempotent upserts on the primary key
+and are submitted without blocking on server-side materialisation. This design
+came directly from a real failure: a blocking write waited indefinitely on a
+stalled free-tier job and froze an entire backfill run. Because writes are
+idempotent and the resume logic is history-aware, simply re-running the job is
+always a safe recovery.
+
+\emph{At the model boundary}, the promotion gate is itself an error-handling
+mechanism. If a training run produces a bad model - because of a corrupt window,
+an ingestion gap or any other cause - the gate refuses it and the previous
+champion continues to serve. There is no path by which an unattended run can
+degrade the service.
+
+\emph{At the auxiliary boundary}, each subordinate capability is wrapped so that
+its failure is logged and execution continues, in accordance with principle P5.
+The monitoring endpoint carries this furthest, with three levels of fallback: it
+serves the committed snapshot if present, computes the report live if not, and
+returns a clear placeholder if neither is possible, so that the tab reports its
+own state rather than showing an error.
+
+\section{Deployment View}
+Figure~\ref{fig:deployment} shows the deployment topology and the two modes in
+which the system can serve.
+
+\fig{deployment}{1.0}{Deployment view: the repository, the scheduled runners, the
+container-hosted API, the statically hosted frontend, and the two serving
+modes.}{fig:deployment}
+
+Four nodes participate. The \textbf{repository} holds the source and, uniquely,
+the published documents and the model bundle, which the nightly workflow commits
+back to it. The \textbf{runners} execute the pipelines and are the only nodes that
+ever contact the feature store. The \textbf{container host} runs the API from a
+deliberately slim image that omits the feature-store and deep-learning
+dependencies entirely, because it serves committed documents and a bundled model
+rather than querying live state. The \textbf{static host} serves the compiled
+frontend from the edge with no server process at all.
+
+The two serving modes are a direct expression of NFR-11. In \emph{dynamic} mode,
+which is how the system is currently deployed, the frontend is built with the
+backend's address and fetches everything live, so the full capability set -
+including what-if simulation and the advisor - is available. In \emph{static}
+mode, no backend address is configured, the same frontend code reads the
+committed snapshots, and the two capabilities that require a live model are
+hidden rather than shown broken. The second mode is not a degraded accident but a
+designed fallback: it guarantees that the forecast remains publicly readable even
+if the container host is unavailable.
+
+\section{Summary of Design and Architecture}
+This chapter set out the six principles that governed the design - durable state
+with disposable compute, decoupling through shared state, strict prevention of
+temporal leakage, gated promotion, subordination of auxiliary capability, and
+publication of the system's own working. It presented the three-plane
+Feature-Training-Inference architecture and the alternatives rejected in
+reaching it, decomposed the package into layers, and specified the data design
+around a single upsert-keyed feature group and four published documents. It
+reported the exploratory analysis that motivated the cyclical encodings, the
+non-linear model class, the empirical interval construction and the drift
+monitoring. It then developed the four decisions that define the system: the
+leakage-controlled feature representation, the horizon-as-feature formulation,
+per-horizon empirical intervals, and the promotion gate. Finally it specified the
+HTTP interface, the layered error-handling strategy and the deployment topology
+with its two serving modes. The next chapter describes how this design was
+implemented.

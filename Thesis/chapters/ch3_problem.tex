@@ -1,0 +1,373 @@
+\chapter{Problem Definition}
+\label{ch:problem}
+
+\section{Introduction}
+Chapter~\ref{ch:intro} introduced the project and Chapter~\ref{ch:literature}
+surveyed the work it builds on. This chapter states the problem precisely. It
+sets out what is wrong with the air-quality information currently available to
+the Pakistani public, examines the systems that exist and where each of them
+stops, distils the shortcomings into a numbered set of gaps, outlines the
+solution this project proposes against each of them, records the assumptions and
+constraints under which that solution was built, assesses its feasibility, and
+enumerates the deliverables by which its completion can be judged.
+
+\section{Problem Statement}
+Air quality in Pakistan is a severe, recurring and largely predictable
+public-health problem, and the information infrastructure available to respond to
+it is inadequate in four distinct ways.
+
+\textbf{It reports the present rather than the future.} Official and commercial
+sources publish the Air Quality Index as it stands at a monitoring station. This
+is a measurement, not a forecast, and it arrives too late to inform the decisions
+people take: whether to walk a child to school tomorrow morning, whether to shift
+an outdoor work detail to a cleaner day, whether an asthmatic should refill a
+prescription before a smog episode. The World Health Organization's
+guidelines~\cite{ref:who} are framed around exposure, and exposure is something
+that can only be reduced by acting \emph{before} it occurs.
+
+\textbf{It covers a few places and ignores the rest.} Where forecasts do exist,
+they overwhelmingly concern Lahore and Karachi. The exploratory analysis
+conducted for this project, presented in Section~\ref{sec:design-eda}, found that
+Faisalabad's mean AQI over the study period was in fact \emph{higher} than
+Lahore's, and that Sargodha, Multan, Gujranwala and Sialkot all sit above the
+threshold the EPA labels unhealthy. Residents of these cities, and of the
+smaller cities of Khyber Pakhtunkhwa, Balochistan, Gilgit-Baltistan and Azad
+Jammu \& Kashmir, are served by nothing at all. A per-city modelling approach
+scales badly to this problem, because each new city requires its own model, its
+own training run and its own maintenance.
+
+\textbf{It explains nothing and quantifies nothing.} A bare index value gives a
+user no way to distinguish a genuine pollution episode from an unusual
+meteorological configuration, no indication of how confident the source is, and
+no means of judging whether the source has been right in the past. Trust in a
+public-health signal is not established by assertion; it is established by
+showing the working. The literature offers the tools - Shapley
+attributions~\cite{ref:shap,ref:treeshap} for the first concern and conformal
+intervals~\cite{ref:leiconformal} for the second - but they are seldom delivered
+to an end user.
+
+\textbf{It is maintained by hand, if at all.} This is the deepest of the four
+problems, and the one the machine-learning literature most often overlooks. Air
+quality is not stationary: the relationship between weather, calendar and
+pollution shifts with the season, with agricultural cycles and with changes in
+emission. A model trained once and left alone therefore decays, and the decay is
+silent - the model continues to emit confident numbers that are progressively
+less correct. Sculley et al.~\cite{ref:techdebt} identified precisely this class
+of failure as the dominant source of technical debt in deployed machine-learning
+systems, and Gama et al.~\cite{ref:driftsurvey} characterised the drift mechanism
+behind it. A forecasting service for a seasonal phenomenon must therefore be
+self-maintaining, or it will quietly stop working within a year of deployment.
+
+Stated formally: \emph{there is a need for an automated system that forecasts the
+Air Quality Index several days ahead for many Pakistani cities rather than one,
+that retrains and validates itself without human intervention while refusing to
+deploy a model that is not measurably better than the one in service, that
+quantifies its own uncertainty and monitors its own inputs and outputs for decay,
+that explains each individual prediction in language a non-specialist can act on,
+and that is delivered publicly and reliably at negligible cost.}
+
+\section{Existing Systems and Current Solutions}
+Four families of existing system bear on this problem. Each solves part of it and
+stops somewhere specific.
+
+\subsection{Government and Regulatory Monitoring}
+Provincial environmental protection agencies operate reference-grade monitoring
+stations and publish index readings. These are the authoritative source for
+\emph{what the air is now}, and nothing in this project attempts to displace them.
+Their limitations for the present purpose are that the station network is sparse
+relative to the population it serves, that the published output is a nowcast, and
+that no explanation or forecast accompanies it.
+
+\subsection{Consumer Air-Quality Applications}
+A number of commercial applications and websites aggregate station and satellite
+data into a consumer-facing index, and the better ones include a short forecast.
+Their weaknesses, from the standpoint of this problem, are that the model behind
+the forecast is undisclosed and unevaluated - no per-horizon accuracy is
+published, so a user cannot know whether the third day of a three-day forecast
+carries any skill at all - that no explanation is offered, and that coverage of
+smaller Pakistani cities is thin. They are products rather than
+scientific instruments, and they are not designed to be checked.
+
+\subsection{Physical Chemical Transport Models}
+Services such as the Copernicus Atmosphere Monitoring System~\cite{ref:cams}
+produce genuinely predictive composition forecasts from first principles. They
+are the correct tool for scientific attribution and for regional policy analysis.
+They are also global-scale scientific infrastructure: they presuppose an
+emissions inventory, meteorological boundary conditions and substantial computing
+capacity. They cannot be reproduced by an individual developer, they are not
+tuned to individual Pakistani cities, and their output is not delivered in a form
+a resident can act on.
+
+\subsection{Published Machine-Learning Studies}
+The academic literature on machine-learning air-quality forecasting is
+large~\cite{ref:raq,ref:xgbpm,ref:lstmpm}, and it establishes convincingly that
+supervised models can forecast pollutant concentrations with useful skill. Its
+characteristic limitation is that it addresses the modelling question and stops.
+A typical paper reports a single averaged accuracy figure for a model trained
+once on a fixed dataset, frequently for one city, sometimes on a randomly
+partitioned validation set that allows the model to train on the future. There is
+usually no retraining pipeline, no promotion gate, no durable registry, no drift
+instrumentation, no deployed interface and no ongoing measurement of whether the
+model is still right. The model is a result; it is not a service.
+
+\section{Identified Problems and Gaps}
+The preceding survey reduces to seven concrete gaps, each of which is addressed
+by a specific component of the system described in this thesis.
+
+\begin{xltabular}{\textwidth}{Q{1.3cm} P{4.6cm} Y}
+\caption{Identified gaps and the component of this system that addresses each.}\label{tab:gaps}\\
+\toprule
+\bfseries ID & \bfseries Gap in current practice & \bfseries How this project addresses it \\
+\midrule
+\endfirsthead
+\toprule
+\bfseries ID & \bfseries Gap in current practice & \bfseries How this project addresses it \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+G1 & Information is a nowcast, so it arrives after the decision it should have
+informed. & A 72-hour hourly forecast, refreshed daily, aggregated into both an
+hourly curve and a three-day view. \\
+G2 & Coverage is limited to one or two major cities; per-city models scale
+badly. & A single global model conditioned on location, trained across 22 cities
+covering every province, the capital territory, Gilgit-Baltistan and Azad Jammu
+\& Kashmir. \\
+G3 & Accuracy is unreported, or reported as one averaged number that conceals
+decay with lead time. & Per-horizon RMSE, MAE and $R^2$ against a per-horizon
+persistence baseline, plus a five-fold walk-forward backtest, published in the
+interface. \\
+G4 & Point forecasts are presented without uncertainty. & An 80\% prediction
+interval derived from empirical residual quantiles, widening with horizon, drawn
+as a band on every chart. \\
+G5 & Predictions are unexplained, so they cannot be interrogated or trusted. &
+Per-forecast SHAP attributions rendered as a plain-language sentence, plus an
+interactive what-if simulator over the model's own drivers. \\
+G6 & Models are trained once and decay silently as the relationship shifts. &
+An hourly feature pipeline and a nightly retraining pipeline, with a
+champion-challenger gate that promotes only a measurable improvement and records
+every decision. \\
+G7 & Nothing watches the system after deployment. & Population Stability Index
+drift monitoring per feature, plus a forecast log joined back to realised
+outcomes so that live error is measured rather than assumed. \\
+\end{xltabular}
+
+\section{Proposed Solution Overview}
+The proposed solution is an operating system rather than a model, built on the
+Feature-Training-Inference pattern~\cite{ref:fti} and running entirely on free
+scheduled infrastructure. Its shape is as follows.
+
+An \textbf{hourly feature pipeline} fetches the last seven days of pollutant and
+weather observations for all 22 cities from a free, keyless public
+API~\cite{ref:openmeteo}, engineers a 74-column feature table for each city
+independently, and upserts the result into a managed feature store keyed on city
+and timestamp. A one-off \textbf{backfill} runs the same logic over the full
+history from January 2023 to the present, in three-month chunks, so that the
+store contains roughly 697,000 hourly rows before the first model is trained.
+
+A \textbf{daily training pipeline} reads the entire feature table, builds a
+multi-horizon supervised dataset in which the forecast horizon is itself an input
+feature, splits it chronologically, trains four candidate models - a persistence
+baseline, a regularised linear model, a random forest and a gradient-boosted
+ensemble - and scores each on a validation window that lies strictly in the
+future relative to the training window. The best fitted candidate becomes the
+\emph{challenger}, and is promoted to \emph{champion} only if it improves on the
+incumbent's validation RMSE. Every run, promoted or refused, is recorded in a
+persistent leaderboard, and every promoted champion is written to a durable,
+versioned model registry.
+
+A \textbf{batch inference pipeline} loads the reigning champion from that
+registry, fetches each city's current pollution state and the coming four days of
+forecast weather, assembles one model input per future hour, predicts the whole
+72-hour curve, widens each point by the residual quantiles recorded for its
+horizon, explains the peak hour with SHAP, raises a hazard alert if the peak
+crosses the unhealthy threshold, and writes a single forecast document.
+
+An \textbf{observability layer} computes the Population Stability Index for each
+monitored feature between a recent window and the historical reference, appends
+every issued forecast to a log, and joins that log back to the air quality that
+subsequently arrived so that realised error can be measured directly.
+
+A \textbf{delivery layer} serves the forecast document, the leaderboard, the
+evaluation results and the monitoring report through a typed HTTP API, presents
+them in a four-tab browser dashboard with an interactive map of Pakistan, and
+exposes the same grounded data to a language-model advisor through a standard
+tool protocol~\cite{ref:mcp}.
+
+\section{Assumptions and Constraints}
+
+\subsection{Assumptions}
+\begin{enumerate}
+  \item \textbf{The data source is representative and available.} Open-Meteo's
+  air-quality product is derived from the Copernicus atmospheric composition
+  reanalysis and forecast, and its weather archive from ERA5~\cite{ref:era5}.
+  These are modelled rather than station-measured values for a given city, and
+  the system assumes they are an adequate proxy for the air a resident of that
+  city breathes.
+  \item \textbf{The weather forecast is usefully accurate.} At training time the
+  model sees the weather that actually occurred at the target hour; at inference
+  time it sees the forecast weather for that hour. The system assumes that the
+  gap between the two is small enough not to invalidate the learned relationship.
+  This is standard practice in operational forecasting, but it means the reported
+  validation error is a slight under-estimate of true operational error, and
+  Chapter~\ref{ch:testing} treats that honestly.
+  \item \textbf{The target definition is stable.} The EPA index definition and
+  its category boundaries~\cite{ref:epa} are assumed not to change during the
+  system's life.
+  \item \textbf{Recent history is available at inference time.} The anchor state
+  - the observed pollution at the moment the forecast is issued - is assumed to
+  be retrievable for every city at every run.
+\end{enumerate}
+
+\subsection{Constraints}
+\begin{enumerate}
+  \item \textbf{Zero budget.} Every component must sit within a free tier. This
+  ruled out managed training infrastructure, paid data, always-on servers and
+  GPU compute, and it directly shaped several design decisions documented in
+  Chapter~\ref{ch:impl}, including the decision to disable feature-store
+  statistics after the profiler exhausted the free executor's memory.
+  \item \textbf{Ephemeral compute.} Scheduled runners are destroyed when a job
+  ends, so no artefact may be left on local disk if it is needed later. This is
+  the constraint that forces a genuine model registry rather than a saved file.
+  \item \textbf{Job time limits.} A scheduled job must finish inside the
+  platform's cap, which constrains the size of the training set and forced the
+  backfill to be chunked, resumable and non-blocking.
+  \item \textbf{Development platform.} Development was carried out on Windows,
+  where the feature-store client cannot be installed because one of its
+  transitive cryptographic dependencies fails to build. All feature-store work
+  therefore runs on Linux continuous integration, and local development uses an
+  interchangeable Parquet backend behind the same interface.
+  \item \textbf{Source granularity.} The finest resolution available is one city
+  and one hour; street-level or sub-hourly forecasting is therefore impossible
+  regardless of modelling choices.
+  \item \textbf{Public exposure.} The deployed interface is public and
+  unauthenticated, which constrains it to read-only, non-sensitive data and makes
+  cost predictability a design concern.
+\end{enumerate}
+
+\section{Feasibility Analysis}
+
+\subsection{Technical Feasibility}
+The technical risks were identified at the outset and each was resolved by a
+concrete mechanism.
+
+The first risk was whether a free-tier feature store could absorb a
+three-and-a-half-year, 22-city backfill. It could, but not naively: a blocking
+insert waited indefinitely on a stalled materialisation job and froze the run at
+the tenth city. Converting the write to a non-blocking submission, writing city by
+city rather than in one batch, and making the resume logic history-aware rather
+than presence-aware resolved it, and the resulting design is idempotent, so a
+failed run can simply be repeated.
+
+The second risk was whether a single global model could serve 22 cities at ten
+horizons without being worse than a per-city model at any of them. The evidence
+in Chapter~\ref{ch:testing} is that it can: the global model beats the
+persistence baseline at every horizon from two hours to 72, by margins of between
+16\% and 41\%, and it retains a substantial margin at the long horizons where a
+local or univariate approach is weakest. The one exception, a one-hour lead time
+at which the trivial predictor is better, is reported and explained rather than
+omitted.
+
+The third risk was whether the daily retraining job would fit inside the
+scheduler's time limit. Subsampling the supervised set to 200,000 rows brings a
+full four-candidate training run comfortably inside the cap, and this is the
+principal reason the gradient-boosted model rather than the recurrent model is
+the production choice: it trains in about a minute against roughly twenty-five
+for the sequence model on the same hardware.
+
+The fourth risk was whether the trained model could be served without a live
+feature-store connection, since the deployment image deliberately omits that
+dependency. It can, because the inference stage writes a self-contained forecast
+document and the model bundle is shipped with the image.
+
+\subsection{Economic Feasibility}
+The system's recurring cost is essentially zero, which was a requirement rather
+than an accident. Data acquisition is free and requires no key. Scheduled compute
+uses the free allowance of the repository host's continuous-integration service;
+the hourly feature job and the nightly training job together consume a small
+fraction of it. Feature storage and the model registry use a free managed tier.
+The frontend is served from a free static edge host. The backend runs as a small
+container on a low-cost container host. The only component with a genuinely
+variable cost is the optional language-model advisor, which is metered per
+request and degrades gracefully - returning a clear message rather than an error
+- when no key is configured. The consequence is that the service can keep
+running indefinitely without a funding decision, which is precisely what a
+public-interest tool needs.
+
+\subsection{Operational Feasibility}
+Operationally, the system is designed to require no one. Ingestion, retraining,
+evaluation, inference and monitoring are all scheduled; the refreshed artefacts
+are committed automatically; the frontend reads them without redeployment. The
+promotion gate means that an unattended retrain cannot degrade the service, since
+a challenger that fails to improve is simply refused and the incumbent continues.
+Each pipeline logs its decisions in a form an operator can audit after the fact,
+and the leaderboard, evaluation report and monitoring report are all published in
+the interface rather than buried in logs. The realistic operational burden is
+periodic review rather than daily intervention.
+
+\section{Deliverables and Development Requirements}
+Table~\ref{tab:deliverables} lists the deliverables against which the project's
+completion is assessed.
+
+\begin{xltabular}{\textwidth}{Q{1.3cm} P{4.9cm} Y}
+\caption{Project deliverables.}\label{tab:deliverables}\\
+\toprule
+\bfseries ID & \bfseries Deliverable & \bfseries Description \\
+\midrule
+\endfirsthead
+\toprule
+\bfseries ID & \bfseries Deliverable & \bfseries Description \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+D1 & Ingestion and feature engineering & A retrying client for three Open-Meteo
+endpoints, an EPA index implementation, and a per-city feature builder producing
+74 columns from 21 raw ones. \\
+D2 & Populated feature store & Roughly 697,000 hourly rows for 22 cities from
+January 2023 onward, upserted on a composite key, with a resumable backfill. \\
+D3 & Exploratory analysis & City ranking, seasonality, diurnal profile, weather
+correlation and distribution figures over the full record. \\
+D4 & Multi-horizon supervised builder & Assembly of target-time, anchor-state and
+horizon features with a chronological split and unit tests asserting the absence
+of leakage. \\
+D5 & Training pipeline & Four candidate families, honest validation, residual
+quantile intervals, and a bundled artefact carrying the estimator, column order,
+interval table and metrics. \\
+D6 & Champion-challenger gate and registry & A persistent leaderboard, a
+promotion rule, and a durable versioned model registry from which inference
+loads. \\
+D7 & Evaluation suite & Per-horizon metrics against a per-horizon baseline, a
+five-fold walk-forward backtest, and a published report and figures. \\
+D8 & Sequence-model study & An LSTM trained and evaluated on the same task and
+split, with a reasoned promotion decision. \\
+D9 & Inference pipeline & A 72-hour forecast with intervals, categories, alerts
+and explanations for every city, written as a single document. \\
+D10 & Explainability & TreeSHAP attributions rendered in plain language,
+per-forecast in the interface and globally as an importance figure. \\
+D11 & What-if simulator & Live re-prediction under user-overridden drivers,
+presented as baseline versus scenario. \\
+D12 & Monitoring & Per-feature PSI drift with status thresholds, a forecast log,
+and realised error scored against observed outcomes. \\
+D13 & API and dashboard & A typed HTTP interface and a four-tab React
+application with charting, cartography and alerting. \\
+D14 & Advisor and tool server & Four grounded tools exposed both to an in-app
+advisor and over the Model Context Protocol. \\
+D15 & Continuous integration and deployment & Three scheduled workflows, a
+container image for the backend, a static build for the frontend, and a live
+public deployment. \\
+D16 & Tests and documentation & Unit tests over the critical logic, and this
+thesis. \\
+\end{xltabular}
+
+\section{Summary of Problem Definition}
+This chapter defined the problem the \projname\ addresses: air-quality
+information for Pakistan that is current-only, geographically narrow,
+unexplained, unquantified and manually maintained. It examined the four families
+of existing system - regulatory monitoring, consumer applications, physical
+transport models and published machine-learning studies - and identified where
+each stops. It distilled seven gaps, outlined the pipeline-based solution
+proposed against them, stated the assumptions and the free-tier constraints under
+which that solution was built, argued its technical, economic and operational
+feasibility, and enumerated sixteen deliverables. The next chapter converts this
+into a formal requirement specification.

@@ -59,3 +59,13 @@ reference/
 !models_local/leaderboard.json
 !models_local/aqi_model.joblib
 !models_local/aqi_model_meta.json
+
+# LaTeX build artefacts (the compiled Thesis/main.pdf IS committed)
+*.aux
+*.fdb_latexmk
+*.fls
+*.lof
+*.lot
+*.out
+*.toc
+*.synctex.gz

@@ -1,0 +1,204 @@
+\chapter{Conclusion and Future Work}
+\label{ch:conclusion}
+
+\section{Conclusion}
+This thesis has presented the \projname: an end-to-end, effectively serverless
+machine-learning system that forecasts the Air Quality Index up to 72 hours ahead
+for 22 cities across every province and territory of Pakistan, retrains and
+validates itself nightly without human intervention, explains each forecast in
+plain language, quantifies its own uncertainty, monitors its own inputs and
+outputs for decay, and serves all of this publicly at a running cost of
+effectively zero.
+
+The work began from the observation that air-quality information in Pakistan is
+the wrong shape for the decisions people make with it. It is a nowcast when a
+forecast is needed; it covers one or two cities when the worst-affected city in
+the record assembled here is not the one that receives the attention; it is
+offered without explanation or uncertainty; and where a model exists at all it is
+a model trained once, which for a strongly seasonal phenomenon means a model that
+decays silently. The response developed here was not to build a better model but
+to build a system that keeps a model correct.
+
+The central architectural decision was to express the system as three decoupled
+Feature, Training and Inference pipelines communicating only through a managed
+feature store and model registry. Because all durable state lives in those two
+services, the compute can be entirely disposable, and because the compute is
+disposable it can be free. The central modelling decision was to treat the
+forecast horizon as an input feature, so that one global model conditioned on
+location serves 22 cities and ten lead times rather than requiring 220 artefacts.
+The central operational decision was to gate promotion: a nightly retrain may
+produce a new model, but it may not deploy one unless it has been measured to be
+better.
+
+\subsection{Fulfilment of the Objectives}
+Each of the six objectives set in Chapter~\ref{ch:intro} was met.
+
+\textbf{Objective 1 - Data and features.} An hourly ingestion pipeline fetches
+seven pollutant and ten weather variables for 22 cities from a free, keyless
+provider with retry and backoff, and a per-city feature builder expands 21 raw
+columns into a 74-column engineered table with cyclical calendar encodings, wind
+vector decomposition, lags at five offsets and rolling statistics over two
+windows. The leakage discipline is enforced by construction - every rolling
+window shifted, every family computed within a single city - and verified by
+unit tests, one of which would fail if the per-city grouping were ever removed. A
+resumable backfill populated the store with roughly 697,000 hourly rows spanning
+January~2023 onward.
+
+\textbf{Objective 2 - Serverless pipeline architecture.} Three pipelines run on
+free scheduled runners: ingestion hourly, and training, inference, evaluation and
+monitoring nightly. They share no code path and communicate only through the
+feature store and the model registry. A model trained on one ephemeral runner is
+loaded by a different job on a different machine, which is the property on which
+the whole architecture rests and which was verified directly.
+
+\textbf{Objective 3 - Accurate multi-horizon forecasting.} A single global
+gradient-boosted model with the horizon as its twenty-seventh input attains a
+validation RMSE of 19.69, MAE of 12.80 and $R^2$ of 0.850, beating a persistence
+baseline by 22\% overall and at every horizon from two hours to three days. Every
+forecast point carries an 80\% prediction interval derived from per-horizon
+empirical residual quantiles, which widens with lead time as the model's real
+errors do.
+
+\textbf{Objective 4 - MLOps discipline.} A champion-challenger gate promotes
+only on a strict improvement in validation RMSE and records every decision in a
+persistent leaderboard; the champion is stored in a durable versioned registry.
+The gate's production record contains a first promotion, a genuine improvement
+from 20.597 to 19.687 after the backfill, and a refusal of an identical model an
+hour later. Accuracy is reported per horizon against a per-horizon baseline and
+under a five-fold walk-forward backtest averaging 20.55, rather than as a single
+averaged number.
+
+\textbf{Objective 5 - A trust layer.} Every city's forecast carries a
+plain-language explanation generated from exact Shapley attributions for its peak
+hour; a what-if simulator re-predicts under user-supplied driver overrides and is
+labelled explicitly as a model simulation; and the system monitors seven features
+for distributional drift by Population Stability Index while separately logging
+every forecast and scoring it against the air quality that subsequently arrived.
+
+\textbf{Objective 6 - Delivery.} A typed HTTP interface serves thirteen
+endpoints, twelve of which return their documented payload against the live
+deployment in between 0.72 and 1.51 seconds; a four-view browser dashboard
+presents the forecast, the model's promotion history, its accuracy by horizon and
+its current drift status; and the same four grounded tools are exposed both to an
+in-application advisor and over the Model Context Protocol.
+
+\section{Contributions}
+The work makes five contributions.
+
+\textbf{A multi-city forecasting service where none existed.} Twenty-two cities
+spanning every province, the capital territory, Gilgit-Baltistan and Azad Jammu
+\& Kashmir receive a three-day, explained, uncertainty-quantified forecast. The
+exploratory analysis reported in Section~\ref{sec:design-eda} also produced a
+finding of independent interest: over the assembled record, Faisalabad's mean
+index exceeds Lahore's, which is an argument against the near-exclusive attention
+that Lahore receives.
+
+\textbf{A demonstration that the full MLOps lifecycle fits inside a free tier.}
+Feature store, scheduled retraining, gated promotion, durable registry, rigorous
+evaluation, drift monitoring and public deployment were assembled entirely from
+free and negligible-cost services. Equally importantly, the twelve concrete
+failures that this constraint produced - a stalled executor freezing a blocking
+insert, a statistics profiler exhausting free memory, a deployment tool honouring
+an ignore file and silently omitting the model - are documented in
+Table~\ref{tab:challenges} with their resolutions, and are the most transferable
+part of this work.
+
+\textbf{A worked instance of horizon-as-feature multi-horizon forecasting.} The
+design collapses 220 potential artefacts into one, is shown to beat persistence
+across the whole forecast window, and is shown to carry a specific and disclosed
+cost at the shortest lead time.
+
+\textbf{Honest reporting as a delivered feature.} The decaying error curve, the
+backtest fold that is much worse than the others, the refused model and the
+unflattering drift status all appear in the public interface rather than in an
+appendix. The claim being made is not that the system is very accurate but that
+the reader can see exactly how accurate it is.
+
+\textbf{A reasoned negative result on deep sequence modelling.} A recurrent
+network was implemented, evaluated on identical terms, found to be 2.3\% better at
+the single horizon it was built for, and declined on grounds of coverage, training
+cost and explainability - with the reasoning recorded rather than the result
+suppressed.
+
+\section{Limitations}
+Six limitations bound these claims, and are stated in the same spirit as the rest
+of the work.
+
+The ground truth is a modelled atmospheric composition product rather than a
+reference-grade station reading, so the system demonstrates skill at forecasting
+that product. The model is trained on observed weather and deployed on forecast
+weather, so the reported errors are a mild under-estimate of operational error.
+The prediction intervals attain their nominal coverage by construction on the
+calibration window but have not been verified prospectively. Unit testing covers
+the index computation and the feature layer but leaves the gate, the intervals,
+the drift computation and the API handlers to integration testing. The operational
+record is short: three training runs and no matured forecast-outcome pairs yet.
+And the interface's usability claims are argued rather than measured.
+
+\section{Future Work}
+
+\subsection{Validation Against Ground Stations}
+The most valuable single extension is to obtain readings from reference-grade
+monitoring stations for as many of the 22 cities as publish them, and to measure
+the divergence between the modelled target and the measured one. This would either
+substantiate the system's output against physical measurement or quantify a bias
+that could then be corrected - a per-city calibration offset learned from the
+comparison would be a natural next step.
+
+\subsection{Prospective Interval Calibration}
+The forecast log already contains everything required to measure realised interval
+coverage: every issued point, its bounds, and eventually the observed value. Once
+enough pairs have matured, empirical coverage should be computed per horizon and
+compared with the nominal 80\%. If coverage proves to degrade during unusual
+regimes, as the exchangeability assumption suggests it might, the natural remedy
+is adaptive conformal prediction, in which the quantile is adjusted online in
+response to recent coverage error.
+
+\subsection{Closing the Loop Between Drift and Retraining}
+At present drift is measured and retraining is scheduled, but the two are
+independent: a significant drift reading does not trigger anything. A natural
+extension is to make drift an input to the schedule - retraining more often, or on
+a shorter and more recent window, when the index or particulate distributions shift
+sharply - and to make a sustained rise in realised error raise an alert rather than
+merely a table row.
+
+\subsection{Probabilistic and Quantile Modelling}
+The current interval is a post-hoc residual construction around a point forecast.
+Training the model directly under a quantile loss, or fitting a small ensemble at
+several quantiles, would produce intervals that adapt to the input rather than
+depending only on the horizon - so that a forecast issued during a volatile
+episode would be visibly less certain than one issued during a settled period.
+
+\subsection{Pollutant-Level and Source-Aware Forecasting}
+Forecasting the constituent pollutants and then composing the index, rather than
+forecasting the index directly, would make the forecast more informative - a user
+could be told that the problem is fine particulate matter specifically - and would
+allow the gaseous sub-indices to be computed properly once the molar-mass
+conversions are implemented. Incorporating exogenous signals such as satellite
+fire-detection data during the crop-residue burning season would address one of
+the largest sources of unmodelled variance.
+
+\subsection{Broader Coverage and Finer Resolution}
+The architecture is not specific to Pakistan or to 22 cities: adding a city is a
+single line in the configuration module, and the global model requires no
+retraining per location. Extending to the wider South Asian airshed, which shares
+the same seasonal mechanism, is a natural direction. Finer spatial resolution
+would require a different data source, since the present provider's granularity is
+the ceiling on what the system can offer.
+
+\subsection{Strengthening the Test Suite and the Interface}
+The gate, the interval construction and the drift computation should be brought
+under unit test, so that a regression in the system's governance is caught before
+deployment rather than in production. On the interface side, a small user study
+would establish whether the explanation is in fact understood, and mobile
+notifications would convert the hazard alert from something a user must visit the
+site to see into something that reaches them.
+
+\section{Summary of Future Work}
+The system as delivered forecasts, retrains, gates, explains and monitors itself,
+and does so publicly and for free. The work that would most improve it is not more
+modelling but more measurement: validating the target against physical stations,
+verifying interval coverage prospectively, and letting the drift and error signals
+it already computes feed back into the schedule that keeps it current. That
+progression - from a system that watches itself to a system that responds to what
+it sees - is the natural continuation of this thesis.

@@ -1,0 +1,209 @@
+\chapter{User Interface}
+\label{ch:ui}
+
+\section{Introduction}
+The interface is where the system stops being a pipeline and becomes a public
+service. This chapter describes the goals that governed its design, the visual
+system it uses, and each of its four views. The figures in this chapter are
+screenshots of the deployed application taken from the live public deployment, so
+the values shown - the forecast, the leaderboard, the drift table - are the
+system's genuine output rather than mock-ups.
+
+\section{Interface Design Goals}
+Five goals shaped the interface.
+
+\textbf{Answer the question in the first screen.} A person opening the page wants
+to know whether the air is safe. The current index, its health category and its
+advice therefore appear immediately, in a card whose colour is itself the answer,
+above the chart rather than below it.
+
+\textbf{Never present a bare number.} In accordance with NFR-4, every forecast
+carries a category name, an uncertainty band and, where one could be computed, an
+explanation. A number alone invites either misplaced confidence or dismissal.
+
+\textbf{Use the standard health semantics.} The colour scale, the category names
+and the advisory wording are the EPA's~\cite{ref:epa}, not the project's. A user
+who has seen an air-quality colour scale elsewhere should not have to learn a new
+one, and the legend is present on the page so that the mapping is never implicit.
+
+\textbf{Publish the system's own record.} Three of the four tabs are given over
+to the model rather than the forecast: its promotion history, its accuracy by
+horizon and its current drift status. This is unusual for a consumer-facing page
+and it is deliberate, in accordance with principle P6.
+
+\textbf{Degrade rather than break.} When the backend is unreachable the interface
+says so specifically; when it is running without a backend at all, the two
+capabilities that require a live model are removed from the navigation rather than
+offered and failing.
+
+\section{The Visual System}
+The application uses a custom dark design system, developed for this project
+under the name \emph{Aurora}. It is built on a near-black canvas with a slowly
+drifting, heavily blurred aurora of cyan, teal, violet and sky gradients behind
+the content, and translucent glass panels above it. The signature accent is a
+cyan-to-teal gradient, chosen to sit well beside the black-and-white 10Pearls
+mark, which appears as a circular badge in the header and as a wordmark in the
+footer.
+
+Three decisions in the visual system are functional rather than decorative. The
+dark canvas maximises the contrast of the six EPA category colours, which are
+saturated and are the most important information on the page; on a white canvas
+the yellow and orange bands in particular lose legibility. The panels are
+separated by elevation and translucency rather than by heavy borders, which keeps
+the eye on the data. And the accent colour is deliberately not one of the six
+category colours, so that interface chrome can never be mistaken for a health
+signal.
+
+An animated introduction holds the application's mark on screen for a short
+minimum duration while the forecast document loads, then fades out once both the
+minimum time has elapsed and the data has arrived. This turns the unavoidable
+initial fetch into a deliberate moment rather than an empty page.
+
+\section{The Forecast View}
+Figure~\ref{fig:ui-forecast} shows the default view.
+
+\fig{ui-forecast}{0.94}{The Forecast view of the deployed
+application.}{fig:ui-forecast}
+
+The view is arranged in two columns. The main column carries, from the top: the
+hazard banner, shown only when the severity is not none; the current-conditions
+card; the forecast chart; and the explanation card. The side column carries the
+map, the category legend and the advisor panel.
+
+The \textbf{hazard banner} is the highest-priority element on the page and is
+present in the figure, reporting a peak of 200 in the \emph{unhealthy} band,
+naming the hour at which the curve first crosses the threshold, and giving the
+standard advice for that category. It appears above everything else because a
+user who reads nothing else on the page should still receive the warning.
+
+The \textbf{current card} states the observed index as a large numeral against the
+colour of its category, names the category, repeats the health advice in full, and
+adds the province and the peak expected over the next three days. Colour is used
+as a redundant encoding here rather than as the sole one: the category is always
+named in text, so the card remains readable to a colour-blind user.
+
+The \textbf{forecast chart} draws the 72-hour curve with the 80\% prediction
+interval as a shaded band behind it, and the category thresholds as faint
+horizontal rules, so the reader can see at a glance which band the curve is in and
+when it crosses. The band is labelled in the panel header rather than left to be
+inferred. A toggle switches between the hourly view and a three-day aggregation
+for a user who wants the summary rather than the detail.
+
+The \textbf{map} places every city on a Pakistan basemap as a marker coloured by
+its current category, with the selected city highlighted. It serves two purposes:
+it allows a city to be selected by pointing rather than by finding it in a list,
+and it makes the geographic pattern visible - in the figure, the concentration of
+red markers across the Punjab plain against the yellow of the coast and the north
+is the exploratory finding of Section~\ref{sec:design-eda} rendered as a picture.
+
+The \textbf{explanation card} presents the sentence generated from the Shapley
+attributions for the peak hour, followed by a signed horizontal bar for each of
+the five leading drivers, and a note stating that the values are feature
+contributions in index points for the peak forecast hour. In the figure the
+current index contributes $+26$, the time of day $+13.4$, the season $-6.6$, the
+six-hour trend $+6.4$ and the temperature $+5.0$ against a base value of 132 -
+which tells a reader not merely that the air will be bad but that it will be bad
+mainly because it is already bad and the diurnal cycle is working against it.
+
+The \textbf{advisor panel} offers three suggested questions and a free-text field.
+Suggestions are shown because a blank conversational field gives a user no
+indication of what the system can answer.
+
+\section{The Model Evaluation View}
+Figure~\ref{fig:ui-eval} shows the evaluation view.
+
+\fig{ui-eval}{0.94}{The Model Evaluation view.}{fig:ui-eval}
+
+Three panels present the model's own record. The \textbf{leaderboard} names the
+current champion with its version, family and metrics, and lists every training
+run in reverse chronological order with its outcome. The refused run discussed in
+Section~\ref{sec:impl-gate} is visible at the top of the table, marked
+\emph{rejected}, immediately above the identical run marked \emph{champion}. That
+a public interface shows a model that was refused is the point: it is evidence
+that the gate is real.
+
+The \textbf{error-by-horizon} chart plots the champion's RMSE against the
+persistence baseline's at each of the ten modelled lead times. Two things are
+legible at once: that error grows steeply with lead time, and that the champion is
+below the baseline across almost the whole window. Publishing the first of these
+is what makes the second credible.
+
+The \textbf{walk-forward table} lists the five rolling folds with their training
+size, test window start, RMSE and $R^2$, and states the mean. It is included
+because a single validation number invites the suspicion that the split was
+fortunate.
+
+\section{The Monitoring View}
+Figure~\ref{fig:ui-monitoring} shows the monitoring view.
+
+\fig{ui-monitoring}{0.94}{The Monitoring view.}{fig:ui-monitoring}
+
+The drift panel states the overall status and names the worst-drifting feature,
+then tabulates the Population Stability Index for each monitored feature with a
+coloured status badge. The three thresholds are stated in the panel's subtitle, so
+that a reader can interpret a number without knowing the measure beforehand. In
+the figure the overall status is significant, driven by temperature; particulate
+matter at ten micrometres and wind speed remain stable.
+
+Presenting an alarming word like \emph{significant} on a public page is a
+deliberate choice, and the second panel is what makes it honest. Forecast error
+tracking reports the realised accuracy of past forecasts once the hours they
+described have arrived; in the figure it correctly reports that forecasts have
+been logged and are waiting for observations rather than displaying a fabricated
+zero. Read together, the two panels say what is true: the inputs have moved
+seasonally, and whether that has cost any accuracy is a question the system will
+answer with data rather than assumption.
+
+\section{The What-If View}
+Figure~\ref{fig:ui-whatif} shows the what-if view after a scenario has been run.
+
+\fig{ui-whatif}{0.94}{The What-If view, showing a scenario result.}{fig:ui-whatif}
+
+Five sliders expose the drivers described in Section~\ref{sec:impl-whatif}, each
+initialised to the current real value for the selected city so that the user
+begins from reality rather than from an arbitrary midpoint. Running the simulation
+calls the live model twice and presents the baseline and the scenario side by
+side, each as a large numeral on its category colour with its category named
+beneath, and states the change between them.
+
+The figure shows a heavy-pollution, still-air scenario for Lahore: particulate
+matter raised to 280 micrograms per cubic metre, the current index raised to 310
+and the wind reduced to 2 kilometres per hour. The model moves the 24-hour
+forecast from 38, in the \emph{good} band, to 159, in the \emph{unhealthy} band -
+a change of $+121$ index points. The panel's subtitle states plainly that this is
+a model simulation and not causal proof, satisfying NFR-6.
+
+The tab is present only when a live backend is configured, because the simulation
+requires the model to be invoked; in the static serving mode it is removed from
+the navigation entirely.
+
+\section{Interaction and Responsiveness}
+Navigation is a single row of tabs, and the selected city is shared across the
+Forecast and What-If views, so a user who has chosen Multan does not have to
+choose it again. The header states when the displayed forecast was generated,
+which is essential for a product whose data is refreshed on a schedule: a stale
+page should be identifiable as stale.
+
+The layout is fluid. On a wide viewport the two columns sit side by side; on a
+narrow one they stack, with the main column first, so that the current conditions
+and the chart precede the map and the legend on a phone. Charts resize with their
+container rather than being fixed, and long tables scroll horizontally within
+their panel rather than forcing the page to scroll.
+
+Three states are handled explicitly rather than being left to chance. While the
+forecast document is loading, the application shows its mark, a spinner and a
+caption. If the fetch fails, it shows a notice naming the failure and, for a
+developer running locally, the command that starts the backend. If a selected city
+is absent from the payload, the application falls back to the first city present
+rather than rendering an empty view.
+
+\section{Summary of User Interface}
+This chapter described the interface through which the system reaches the public:
+its five design goals, the dark Aurora visual system and the functional reasons
+behind it, and its four views. The Forecast view answers the user's question
+immediately and supports it with an uncertainty band, a map, a legend, an
+explanation and an advisor. The Model Evaluation and Monitoring views publish the
+system's own record - including a refused model and an unflattering drift status
+- because a public-health signal that cannot be checked will not be trusted. The
+What-If view lets a user interrogate the model directly. The next chapter reports
+the testing and the empirical evaluation of everything described so far.

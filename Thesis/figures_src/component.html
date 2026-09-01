@@ -1,0 +1,122 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="_style.css"></head>
+<body><div id="canvas">
+<svg width="1160" height="700" viewBox="0 0 1160 700">
+  <defs>
+    <marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#5C6B7A"/></marker>
+  </defs>
+  <text x="580" y="32" text-anchor="middle" class="t-title">Module Decomposition of the Python Package</text>
+
+  <!-- entry points -->
+  <rect x="30" y="58" width="1100" height="86" rx="12" fill="#F7FAFD" stroke="#1F3A5F" stroke-width="1.8"/>
+  <text x="46" y="82" class="t-b">Entry points</text>
+  <rect x="180" y="92" width="200" height="38" rx="7" fill="#1F3A5F"/><text x="280" y="116" text-anchor="middle" class="t-s" style="fill:#fff">pipelines.feature_pipeline</text>
+  <rect x="392" y="92" width="180" height="38" rx="7" fill="#1F3A5F"/><text x="482" y="116" text-anchor="middle" class="t-s" style="fill:#fff">pipelines.backfill</text>
+  <rect x="584" y="92" width="200" height="38" rx="7" fill="#1F3A5F"/><text x="684" y="116" text-anchor="middle" class="t-s" style="fill:#fff">pipelines.training_pipeline</text>
+  <rect x="796" y="92" width="180" height="38" rx="7" fill="#1F3A5F"/><text x="886" y="116" text-anchor="middle" class="t-s" style="fill:#fff">pipelines.inference</text>
+
+  <!-- serving -->
+  <rect x="30" y="160" width="1100" height="86" rx="12" fill="#F7FAFD" stroke="#2C6FB5" stroke-width="1.8"/>
+  <text x="46" y="184" class="t-b">Serving and interaction</text>
+  <rect x="240" y="194" width="150" height="38" rx="7" fill="#EEF4FA" stroke="#2C6FB5"/><text x="315" y="218" text-anchor="middle" class="t-s">api.main</text>
+  <rect x="402" y="194" width="150" height="38" rx="7" fill="#EEF4FA" stroke="#2C6FB5"/><text x="477" y="218" text-anchor="middle" class="t-s">advisor</text>
+  <rect x="564" y="194" width="150" height="38" rx="7" fill="#EEF4FA" stroke="#2C6FB5"/><text x="639" y="218" text-anchor="middle" class="t-s">mcp.server</text>
+  <rect x="726" y="194" width="150" height="38" rx="7" fill="#EEF4FA" stroke="#2C6FB5"/><text x="801" y="218" text-anchor="middle" class="t-s">tools</text>
+  <rect x="888" y="194" width="150" height="38" rx="7" fill="#EEF4FA" stroke="#2C6FB5"/><text x="963" y="218" text-anchor="middle" class="t-s">whatif</text>
+
+  <!-- model layer -->
+  <rect x="30" y="262" width="1100" height="122" rx="12" fill="#F7FAFD" stroke="#256f6f" stroke-width="1.8"/>
+  <text x="46" y="286" class="t-b">Model layer</text>
+  <rect x="196" y="298" width="176" height="70" rx="8" fill="#E6F2EC" stroke="#2E7D52"/>
+  <text x="284" y="322" text-anchor="middle" class="t-s">models.registry</text>
+  <text x="284" y="342" text-anchor="middle" class="t-s">bundle save and load,</text>
+  <text x="284" y="358" text-anchor="middle" class="t-s">registry or local fallback</text>
+
+  <rect x="386" y="298" width="176" height="70" rx="8" fill="#E6F2EC" stroke="#2E7D52"/>
+  <text x="474" y="322" text-anchor="middle" class="t-s">models.leaderboard</text>
+  <text x="474" y="342" text-anchor="middle" class="t-s">promotion gate and</text>
+  <text x="474" y="358" text-anchor="middle" class="t-s">version history</text>
+
+  <rect x="576" y="298" width="176" height="70" rx="8" fill="#E6F2EC" stroke="#2E7D52"/>
+  <text x="664" y="322" text-anchor="middle" class="t-s">models.evaluate</text>
+  <text x="664" y="342" text-anchor="middle" class="t-s">per-horizon metrics,</text>
+  <text x="664" y="358" text-anchor="middle" class="t-s">walk-forward backtest</text>
+
+  <rect x="766" y="298" width="140" height="70" rx="8" fill="#E6F2EC" stroke="#2E7D52"/>
+  <text x="836" y="322" text-anchor="middle" class="t-s">models.explain</text>
+  <text x="836" y="342" text-anchor="middle" class="t-s">SHAP to plain</text>
+  <text x="836" y="358" text-anchor="middle" class="t-s">language</text>
+
+  <rect x="920" y="298" width="140" height="70" rx="8" fill="#fff" stroke="#B9C6D6" stroke-dasharray="4 3"/>
+  <text x="990" y="322" text-anchor="middle" class="t-s">models.lstm</text>
+  <text x="990" y="342" text-anchor="middle" class="t-s">sequence-model</text>
+  <text x="990" y="358" text-anchor="middle" class="t-s">study, not shipped</text>
+
+  <!-- feature layer -->
+  <rect x="30" y="400" width="540" height="122" rx="12" fill="#F7FAFD" stroke="#2C6FB5" stroke-width="1.8"/>
+  <text x="46" y="424" class="t-b">Feature layer</text>
+  <rect x="70" y="436" width="220" height="70" rx="8" fill="#EEF4FA" stroke="#2C6FB5"/>
+  <text x="180" y="460" text-anchor="middle" class="t-s">features.engineering</text>
+  <text x="180" y="480" text-anchor="middle" class="t-s">lags, rolling windows, calendar,</text>
+  <text x="180" y="496" text-anchor="middle" class="t-s">wind vectors, target column</text>
+
+  <rect x="310" y="436" width="220" height="70" rx="8" fill="#EEF4FA" stroke="#2C6FB5"/>
+  <text x="420" y="460" text-anchor="middle" class="t-s">features.supervised</text>
+  <text x="420" y="480" text-anchor="middle" class="t-s">multi-horizon assembly and</text>
+  <text x="420" y="496" text-anchor="middle" class="t-s">chronological split</text>
+
+  <!-- observability -->
+  <rect x="590" y="400" width="540" height="122" rx="12" fill="#F7FAFD" stroke="#C8881A" stroke-width="1.8"/>
+  <text x="606" y="424" class="t-b">Observability</text>
+  <rect x="630" y="436" width="220" height="70" rx="8" fill="#FBEEDF" stroke="#C8881A"/>
+  <text x="740" y="460" text-anchor="middle" class="t-s">monitoring</text>
+  <text x="740" y="480" text-anchor="middle" class="t-s">PSI drift, forecast log,</text>
+  <text x="740" y="496" text-anchor="middle" class="t-s">realised error scoring</text>
+
+  <rect x="870" y="436" width="220" height="70" rx="8" fill="#FBEEDF" stroke="#C8881A"/>
+  <text x="980" y="460" text-anchor="middle" class="t-s">alerts</text>
+  <text x="980" y="480" text-anchor="middle" class="t-s">threshold checks and</text>
+  <text x="980" y="496" text-anchor="middle" class="t-s">health advice</text>
+
+  <!-- data layer -->
+  <rect x="30" y="538" width="1100" height="122" rx="12" fill="#F7FAFD" stroke="#2E8B8B" stroke-width="1.8"/>
+  <text x="46" y="562" class="t-b">Data and configuration layer</text>
+  <rect x="120" y="574" width="200" height="70" rx="8" fill="#E6F2EC" stroke="#2E7D52"/>
+  <text x="220" y="598" text-anchor="middle" class="t-s">data.openmeteo</text>
+  <text x="220" y="618" text-anchor="middle" class="t-s">retrying HTTP client for</text>
+  <text x="220" y="634" text-anchor="middle" class="t-s">three Open-Meteo endpoints</text>
+
+  <rect x="340" y="574" width="180" height="70" rx="8" fill="#E6F2EC" stroke="#2E7D52"/>
+  <text x="430" y="598" text-anchor="middle" class="t-s">data.aqi</text>
+  <text x="430" y="618" text-anchor="middle" class="t-s">EPA breakpoints,</text>
+  <text x="430" y="634" text-anchor="middle" class="t-s">categories, advice</text>
+
+  <rect x="540" y="574" width="200" height="70" rx="8" fill="#E6F2EC" stroke="#2E7D52"/>
+  <text x="640" y="598" text-anchor="middle" class="t-s">data.store</text>
+  <text x="640" y="618" text-anchor="middle" class="t-s">backend-agnostic facade:</text>
+  <text x="640" y="634" text-anchor="middle" class="t-s">Hopsworks or local Parquet</text>
+
+  <rect x="760" y="574" width="180" height="70" rx="8" fill="#E6F2EC" stroke="#2E7D52"/>
+  <text x="850" y="598" text-anchor="middle" class="t-s">data.hopsworks_store</text>
+  <text x="850" y="618" text-anchor="middle" class="t-s">feature group, view,</text>
+  <text x="850" y="634" text-anchor="middle" class="t-s">login, upsert</text>
+
+  <rect x="960" y="574" width="140" height="70" rx="8" fill="#1F3A5F"/>
+  <text x="1030" y="602" text-anchor="middle" class="t-s" style="fill:#fff">config</text>
+  <text x="1030" y="622" text-anchor="middle" class="t-s" style="fill:#cdd9e8">22 cities, paths,</text>
+  <text x="1030" y="638" text-anchor="middle" class="t-s" style="fill:#cdd9e8">secrets, horizon</text>
+
+  <!-- dependency arrows (top down) -->
+  <path d="M280,134 L280,190" stroke="#5C6B7A" stroke-width="1.6" marker-end="url(#a)"/>
+  <path d="M684,134 L664,292" stroke="#5C6B7A" stroke-width="1.6" marker-end="url(#a)"/>
+  <path d="M886,134 L836,292" stroke="#5C6B7A" stroke-width="1.6" marker-end="url(#a)"/>
+  <path d="M315,236 L315,292" stroke="#5C6B7A" stroke-width="1.6" marker-end="url(#a)"/>
+  <path d="M801,236 L836,292" stroke="#5C6B7A" stroke-width="1.6" marker-end="url(#a)"/>
+  <path d="M284,372 L240,430" stroke="#5C6B7A" stroke-width="1.6" marker-end="url(#a)"/>
+  <path d="M664,372 L470,430" stroke="#5C6B7A" stroke-width="1.6" marker-end="url(#a)"/>
+  <path d="M180,510 L200,568" stroke="#5C6B7A" stroke-width="1.6" marker-end="url(#a)"/>
+  <path d="M420,510 L440,568" stroke="#5C6B7A" stroke-width="1.6" marker-end="url(#a)"/>
+  <path d="M740,510 L680,568" stroke="#5C6B7A" stroke-width="1.6" marker-end="url(#a)"/>
+
+  <text x="580" y="686" text-anchor="middle" class="t-s">Arrows point from a module to the modules it depends on. Every dependency runs downwards: no lower layer ever imports a higher one.</text>
+</svg>
+</div></body></html>

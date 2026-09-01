@@ -1,0 +1,80 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="_style.css"></head>
+<body><div id="canvas">
+<svg width="1100" height="640" viewBox="0 0 1100 640">
+  <defs>
+    <marker id="a" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#2C6FB5"/></marker>
+    <marker id="o" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#C8881A"/></marker>
+  </defs>
+  <text x="550" y="32" text-anchor="middle" class="t-title">Self-Monitoring: Input Drift and Realised Forecast Error</text>
+
+  <!-- Left: drift -->
+  <rect x="24" y="62" width="520" height="300" rx="12" fill="#EEF4FA" stroke="#2C6FB5" stroke-width="2"/>
+  <text x="284" y="90" text-anchor="middle" class="t-h">1 &#183; Input drift - is the world still the world we trained on?</text>
+
+  <rect x="48" y="106" width="220" height="72" rx="8" fill="#fff" stroke="#B9C6D6"/>
+  <text x="158" y="130" text-anchor="middle" class="t-b">Reference window</text>
+  <text x="158" y="152" text-anchor="middle" class="t-s">everything older than 14 days</text>
+  <text x="158" y="170" text-anchor="middle" class="t-s">689,546 rows</text>
+
+  <rect x="300" y="106" width="220" height="72" rx="8" fill="#fff" stroke="#B9C6D6"/>
+  <text x="410" y="130" text-anchor="middle" class="t-b">Recent window</text>
+  <text x="410" y="152" text-anchor="middle" class="t-s">the last 14 days</text>
+  <text x="410" y="170" text-anchor="middle" class="t-s">7,414 rows</text>
+
+  <path d="M158,182 L250,208" stroke="#2C6FB5" stroke-width="2" marker-end="url(#a)"/>
+  <path d="M410,182 L318,208" stroke="#2C6FB5" stroke-width="2" marker-end="url(#a)"/>
+
+  <rect x="150" y="214" width="268" height="62" rx="8" fill="#1F3A5F"/>
+  <text x="284" y="238" text-anchor="middle" class="t-b" style="fill:#fff">Population Stability Index, per feature</text>
+  <text x="284" y="260" text-anchor="middle" class="t-s" style="fill:#cdd9e8">deciles of the reference, compared bin by bin</text>
+
+  <rect x="48" y="292" width="150" height="50" rx="8" fill="#E6F2EC" stroke="#2E7D52"/>
+  <text x="123" y="314" text-anchor="middle" class="t-b">below 0.10</text>
+  <text x="123" y="332" text-anchor="middle" class="t-s">stable</text>
+  <rect x="210" y="292" width="150" height="50" rx="8" fill="#FBEEDF" stroke="#C8881A"/>
+  <text x="285" y="314" text-anchor="middle" class="t-b">0.10 to 0.25</text>
+  <text x="285" y="332" text-anchor="middle" class="t-s">moderate</text>
+  <rect x="372" y="292" width="150" height="50" rx="8" fill="#F4E9EC" stroke="#B5485B"/>
+  <text x="447" y="314" text-anchor="middle" class="t-b">above 0.25</text>
+  <text x="447" y="332" text-anchor="middle" class="t-s">significant</text>
+
+  <!-- Right: forecast error -->
+  <rect x="576" y="62" width="500" height="300" rx="12" fill="#E6F2EC" stroke="#2E7D52" stroke-width="2"/>
+  <text x="826" y="90" text-anchor="middle" class="t-h">2 &#183; Realised error - was yesterday&#8217;s forecast right?</text>
+
+  <rect x="600" y="106" width="200" height="62" rx="8" fill="#fff" stroke="#B9C6D6"/>
+  <text x="700" y="130" text-anchor="middle" class="t-b">Forecast log</text>
+  <text x="700" y="152" text-anchor="middle" class="t-s">every predicted point, with the</text>
+  <text x="700" y="168" text-anchor="middle" class="t-s">hour it was issued for</text>
+
+  <rect x="850" y="106" width="200" height="62" rx="8" fill="#fff" stroke="#B9C6D6"/>
+  <text x="950" y="130" text-anchor="middle" class="t-b">Feature store</text>
+  <text x="950" y="152" text-anchor="middle" class="t-s">the AQI that actually</text>
+  <text x="950" y="168" text-anchor="middle" class="t-s">arrived at that hour</text>
+
+  <path d="M700,178 L790,208" stroke="#2E7D52" stroke-width="2" marker-end="url(#a)"/>
+  <path d="M950,178 L862,208" stroke="#2E7D52" stroke-width="2" marker-end="url(#a)"/>
+
+  <rect x="676" y="214" width="300" height="62" rx="8" fill="#256f6f"/>
+  <text x="826" y="238" text-anchor="middle" class="t-b" style="fill:#fff">Inner join on city and target hour</text>
+  <text x="826" y="260" text-anchor="middle" class="t-s" style="fill:#cfe6e6">a forecast can only be scored once reality catches up</text>
+
+  <rect x="600" y="292" width="450" height="50" rx="8" fill="#fff" stroke="#B9C6D6"/>
+  <text x="825" y="314" text-anchor="middle" class="t-b">MAE and RMSE on live traffic, plus the five largest misses</text>
+  <text x="825" y="333" text-anchor="middle" class="t-s">the honest counterpart to a validation score computed on held-out history</text>
+
+  <!-- convergence -->
+  <path d="M284,362 C284,410 460,412 520,424" stroke="#C8881A" stroke-width="2.4" fill="none" marker-end="url(#o)"/>
+  <path d="M826,362 C826,410 640,412 580,424" stroke="#C8881A" stroke-width="2.4" fill="none" marker-end="url(#o)"/>
+
+  <rect x="290" y="428" width="520" height="76" rx="10" fill="#FBEEDF" stroke="#C8881A" stroke-width="2"/>
+  <text x="550" y="456" text-anchor="middle" class="t-h" fill="#8a5e12">monitoring.json - committed each night, served by the API</text>
+  <text x="550" y="482" text-anchor="middle" class="t-s">read by the Monitoring tab of the dashboard and by the operator</text>
+
+  <rect x="24" y="530" width="1052" height="94" rx="12" fill="#F7FAFD" stroke="#B9C6D6" stroke-width="1.6"/>
+  <text x="44" y="556" class="t-b">Reading the two signals together</text>
+  <text x="44" y="580" class="t-s">Drift alone is not a fault. The current report shows a significant reading on temperature, humidity and pressure, which is exactly what a seasonal transition</text>
+  <text x="44" y="600" class="t-s">looks like in a country with a pronounced winter smog season; the correct response is that the nightly retrain has already absorbed it. Drift becomes a</text>
+  <text x="44" y="618" class="t-s">problem only when the realised error on the right rises with it - which is why the system measures both rather than either one alone.</text>
+</svg>
+</div></body></html>
