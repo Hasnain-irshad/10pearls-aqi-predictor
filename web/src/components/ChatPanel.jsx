@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { api } from "../api";
+import { renderMarkdown } from "../markdown";
 
 // AI air-quality advisor — grounded in the real model via the /api/chat backend.
 export default function ChatPanel({ city }) {
@@ -52,11 +53,22 @@ export default function ChatPanel({ city }) {
             ))}
           </div>
         )}
-        {messages.map((m, i) => (
-          <div key={i} className={`chat-msg ${m.role}`}>
-            {m.content}
-          </div>
-        ))}
+        {messages.map((m, i) =>
+          m.role === "assistant" ? (
+            // The advisor replies in Markdown; render it rather than printing
+            // the asterisks. renderMarkdown escapes the text before adding any
+            // tags, so model output cannot inject HTML.
+            <div
+              key={i}
+              className="chat-msg assistant md"
+              dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }}
+            />
+          ) : (
+            <div key={i} className="chat-msg user">
+              {m.content}
+            </div>
+          )
+        )}
         {busy && <div className="chat-msg assistant thinking">…thinking</div>}
         {error && <div className="chat-error">{error}</div>}
         <div ref={endRef} />
