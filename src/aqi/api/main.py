@@ -221,3 +221,23 @@ def advisor_status():
     from aqi.advisor import status
 
     return status()
+
+
+@app.get("/api/advisor/models")
+def advisor_models():
+    """Model ids the configured key can actually use.
+
+    Providers retire model ids without warning, so this makes 'which model
+    should AQI_ADVISOR_MODEL be set to' answerable from the deployment itself
+    rather than by guesswork.
+    """
+    from aqi.llm import ProviderError, resolve_provider
+
+    try:
+        provider = resolve_provider()
+        if provider is None:
+            raise HTTPException(status_code=503, detail="No advisor key configured.")
+        return {"provider": provider.name, "default": provider.default_model,
+                "models": provider.list_models()}
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))

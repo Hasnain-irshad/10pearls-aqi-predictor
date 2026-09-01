@@ -10,7 +10,7 @@ Three providers are implemented, all over plain HTTPS with ``requests``:
 ======  ==================================  ==========================
 Name    Environment variable                Default model
 ======  ==================================  ==========================
-gemini  GEMINI_API_KEY / GOOGLE_API_KEY     gemini-2.0-flash
+gemini  GEMINI_API_KEY / GOOGLE_API_KEY     gemini-3.6-flash
 groq    GROQ_API_KEY                        llama-3.3-70b-versatile
 claude  ANTHROPIC_API_KEY                   claude-sonnet-4-5
 ======  ==================================  ==========================
@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -87,6 +88,18 @@ class _Provider:
     env_keys: tuple[str, ...] = ()
     default_model: str = ""
 
+    def __init__(self) -> None:
+        # requested model -> the one the provider told us to use instead.
+        self._resolved: dict[str, str] = {}
+
+    def effective_model(self, model: str) -> str:
+        """The model actually used, after any provider-suggested substitution."""
+        return self._resolved.get(model, model)
+
+    def list_models(self) -> list[str]:
+        """Model ids this key can use. Used by /api/advisor/models."""
+        raise NotImplementedError(f"{self.name} cannot list models.")
+
     def api_key(self) -> str | None:
         for key in self.env_keys:
             value = os.getenv(key)
@@ -114,8 +127,27 @@ class _Provider:
 class Gemini(_Provider):
     name = "gemini"
     env_keys = ("GEMINI_API_KEY", "GOOGLE_API_KEY")
-    default_model = "gemini-2.0-flash"
+    default_model = "gemini-3.6-flash"
     base_url = "https://generativelanguage.googleapis.com/v1beta/models"
+
+    # Google retires model ids and names the replacement in the 404 body, e.g.
+    # "This model models/gemini-2.0-flash is no longer available. Please update
+    #  your code to use models/gemini-3.6-flash". Rather than hard-fail on a
+    # rotation, learn the substitution once and carry on.
+    _REPLACEMENT = re.compile(r"use\s+models/([A-Za-z0-9._-]+)")
+
+    def list_models(self) -> list[str]:
+        import requests
+
+        r = requests.get(self.base_url, params={"key": self.api_key(), "pageSize": 200},
+                         timeout=REQUEST_TIMEOUT)
+        if r.status_code >= 400:
+            raise ProviderError(f"Gemini returned {r.status_code}: {r.text[:300]}")
+        out = []
+        for m in r.json().get("models", []):
+            if "generateContent" in (m.get("supportedGenerationMethods") or ["generateContent"]):
+                out.append(m.get("name", "").removeprefix("models/"))
+        return sorted(n for n in out if n)
 
     def _declarations(self, tools: list[dict]) -> list[dict]:
         decls = []
@@ -142,7 +174,6 @@ class Gemini(_Provider):
     def request(self, messages, tools, system, model):
         import requests
 
-        url = f"{self.base_url}/{model}:generateContent"
         body = {
             "contents": messages,
             "systemInstruction": {"parts": [{"text": system}]},
@@ -151,8 +182,23 @@ class Gemini(_Provider):
         if tools:
             body["tools"] = [{"functionDeclarations": self._declarations(tools)}]
 
-        r = requests.post(url, params={"key": self.api_key()}, json=body,
+        wanted = self.effective_model(model)
+        r = requests.post(f"{self.base_url}/{wanted}:generateContent",
+                          params={"key": self.api_key()}, json=body,
                           timeout=REQUEST_TIMEOUT)
+
+        # A retired model id: adopt the replacement Google names and retry once.
+        if r.status_code == 404:
+            match = self._REPLACEMENT.search(r.text or "")
+            if match and match.group(1) != wanted:
+                replacement = match.group(1)
+                logger.warning("Gemini model %s is retired; switching to %s.",
+                               wanted, replacement)
+                self._resolved[model] = replacement
+                r = requests.post(f"{self.base_url}/{replacement}:generateContent",
+                                  params={"key": self.api_key()}, json=body,
+                                  timeout=REQUEST_TIMEOUT)
+
         if r.status_code >= 400:
             raise ProviderError(f"Gemini returned {r.status_code}: {r.text[:300]}")
         data = r.json()
@@ -197,6 +243,16 @@ class Groq(_Provider):
     @property
     def base_url(self) -> str:
         return os.getenv("AQI_ADVISOR_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/")
+
+    def list_models(self) -> list[str]:
+        import requests
+
+        r = requests.get(f"{self.base_url}/models",
+                         headers={"Authorization": f"Bearer {self.api_key()}"},
+                         timeout=REQUEST_TIMEOUT)
+        if r.status_code >= 400:
+            raise ProviderError(f"Groq returned {r.status_code}: {r.text[:300]}")
+        return sorted(m.get("id", "") for m in r.json().get("data", []) if m.get("id"))
 
     def _tools(self, tools: list[dict]) -> list[dict]:
         return [
@@ -272,6 +328,17 @@ class Claude(_Provider):
     env_keys = ("ANTHROPIC_API_KEY",)
     default_model = "claude-sonnet-4-5"
     base_url = "https://api.anthropic.com/v1"
+
+    def list_models(self) -> list[str]:
+        import requests
+
+        r = requests.get(f"{self.base_url}/models",
+                         headers={"x-api-key": self.api_key() or "",
+                                  "anthropic-version": "2023-06-01"},
+                         timeout=REQUEST_TIMEOUT)
+        if r.status_code >= 400:
+            raise ProviderError(f"Anthropic returned {r.status_code}: {r.text[:300]}")
+        return sorted(m.get("id", "") for m in r.json().get("data", []) if m.get("id"))
 
     def build_messages(self, history, question):
         messages = []
@@ -390,7 +457,7 @@ def chat_with_tools(
                 "answer": (turn.text or "").strip(),
                 "stop_reason": turn.stop_reason,
                 "provider": provider.name,
-                "model": model,
+                "model": provider.effective_model(model),
                 "tools_used": tools_used,
             }
 
@@ -410,6 +477,6 @@ def chat_with_tools(
         "answer": "Sorry - I couldn't complete that. Please rephrase.",
         "stop_reason": "max_rounds",
         "provider": provider.name,
-        "model": model,
+        "model": provider.effective_model(model),
         "tools_used": tools_used,
     }

@@ -220,7 +220,7 @@ def test_explicit_provider_override_and_errors(monkeypatch):
 def test_model_override(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "x")
     monkeypatch.delenv("AQI_ADVISOR_MODEL", raising=False)
-    assert llm.model_for(Gemini()) == "gemini-2.0-flash"
+    assert llm.model_for(Gemini()) == "gemini-3.6-flash"
     monkeypatch.setenv("AQI_ADVISOR_MODEL", "gemini-2.5-flash")
     assert llm.model_for(Gemini()) == "gemini-2.5-flash"
 
@@ -251,3 +251,62 @@ def test_a_failing_tool_does_not_abort_the_conversation(capture, monkeypatch):
                              run_tool=boom, provider=Groq())
     assert result["answer"] == "I could not look that up."
     assert "store offline" in sent[1]["json"]["messages"][-1]["content"]
+
+
+# ------------------------------------------------- retired-model self-healing
+def test_gemini_adopts_the_replacement_model_named_in_a_404(capture, monkeypatch):
+    """Google retires ids and names the successor in the 404 body; adopt it."""
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setenv("AQI_ADVISOR_MODEL", "gemini-2.0-flash")   # pinned to a retired id
+
+    retired = FakeResponse({"error": {"code": 404, "message":
+        "This model models/gemini-2.0-flash is no longer available. Please "
+        "update your code to use models/gemini-3.6-flash for the latest "
+        "features and improvements.", "status": "NOT_FOUND"}}, status_code=404)
+    ok = FakeResponse({"candidates": [{"content": {"role": "model", "parts": [
+        {"text": "Thursday looks cleanest."}]}, "finishReason": "STOP"}]})
+
+    provider = Gemini()
+    sent = capture([retired, ok, ok])
+    result = chat_with_tools("Which day is cleanest?", None, system="S", tools=TOOLS,
+                             run_tool=lambda *a: {}, provider=provider)
+
+    assert result["answer"] == "Thursday looks cleanest."
+    assert "gemini-2.0-flash:generateContent" in sent[0]["url"]   # tried the pinned id
+    assert "gemini-3.6-flash:generateContent" in sent[1]["url"]   # retried on the successor
+    assert result["model"] == "gemini-3.6-flash"                  # reports what was used
+
+    # the substitution is remembered, so later turns do not repeat the 404
+    provider.request([], TOOLS, "S", "gemini-2.0-flash")
+    assert "gemini-3.6-flash:generateContent" in sent[2]["url"]
+
+
+def test_gemini_404_without_a_suggestion_is_reported(capture, monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    capture([FakeResponse({"error": {"message": "not found"}}, status_code=404)])
+    with pytest.raises(ProviderError, match="404"):
+        chat_with_tools("q", None, system="S", tools=TOOLS,
+                        run_tool=lambda *a: {}, provider=Gemini())
+
+
+def test_default_gemini_model_is_current(monkeypatch):
+    monkeypatch.delenv("AQI_ADVISOR_MODEL", raising=False)
+    assert Gemini().default_model == "gemini-3.6-flash"
+
+
+def test_list_models(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "k")
+    monkeypatch.setenv("GROQ_API_KEY", "k")
+
+    def fake_get(url, **kwargs):
+        if "generativelanguage" in url:
+            return FakeResponse({"models": [
+                {"name": "models/gemini-3.6-flash",
+                 "supportedGenerationMethods": ["generateContent"]},
+                {"name": "models/text-embedding-004",
+                 "supportedGenerationMethods": ["embedContent"]}]})
+        return FakeResponse({"data": [{"id": "llama-3.3-70b-versatile"}, {"id": "whisper"}]})
+
+    monkeypatch.setattr(requests, "get", fake_get)
+    assert Gemini().list_models() == ["gemini-3.6-flash"]      # embedding model filtered out
+    assert Groq().list_models() == ["llama-3.3-70b-versatile", "whisper"]
