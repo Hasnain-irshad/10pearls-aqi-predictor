@@ -702,9 +702,12 @@ feature-store credentials injected from the secret store.
 
 The \textbf{training workflow} runs daily at 02:30~UTC and executes four steps in
 order: train, infer, evaluate and monitor, then commit the refreshed artefacts
-back to the repository. The evaluation and monitoring steps are permitted to fail
-without failing the workflow, since neither is required for a forecast to be
-served. The commit message carries a skip marker so that committing artefacts
+back to the repository. Only the training step can fail the workflow; the rest
+run unconditionally. That is a deliberate consequence of principle P2: inference
+reads the provider and the model registry but never the feature store, so a
+feature-store outage during training must not also cost the site its daily
+forecast refresh. Evaluation and monitoring, which do read the feature store, are
+allowed to fail quietly for the same reason. The commit message carries a skip marker so that committing artefacts
 cannot trigger another run.
 
 The \textbf{backfill workflow} is manual, takes the history start date as an
@@ -804,6 +807,13 @@ into the build command in the platform configuration; the address is public, so
 this is appropriate rather than a compromise. \\
 The gradient-boosting library failed at import in the container & The slim base
 image lacks the OpenMP runtime. & Installed it explicitly in the image. \\
+The nightly training run failed on five of ten nights & The free-tier Arrow
+Flight query service intermittently drops a large read, surfacing as
+\emph{FlightUnavailableError: Socket closed} with gRPC status 14. It is not
+deterministic: the identical read succeeds on other nights. & Retry the read with
+increasing backoff, and make inference, evaluation, monitoring and the commit run
+whether or not training succeeded, so a feature-store outage costs a retrain but
+not the day's forecast. \\
 The application resolved its data paths to the wrong directory in the container &
 An ordinary install placed the package in the interpreter's library directory, so
 the derived project root pointed away from the committed artefacts. & Installed

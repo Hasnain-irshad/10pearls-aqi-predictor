@@ -6,6 +6,9 @@ agnostic.
 """
 from __future__ import annotations
 
+import os
+import time
+
 import pandas as pd
 
 from aqi.config import HOPSWORKS
@@ -15,6 +18,11 @@ logger = get_logger(__name__)
 
 PRIMARY_KEY = ["city", "timestamp"]
 EVENT_TIME = "datetime"
+
+# The free-tier query service drops large reads intermittently; retry rather
+# than fail the nightly run. See read_features().
+READ_ATTEMPTS = int(os.getenv("AQI_FS_READ_ATTEMPTS", "4"))
+READ_BACKOFF = float(os.getenv("AQI_FS_READ_BACKOFF", "30"))
 
 
 _PROJECT = None  # cached connection, reused across per-city inserts in the backfill
@@ -136,10 +144,48 @@ def get_feature_view(project):
     )
 
 
-def read_features(project) -> pd.DataFrame:
-    fv = get_feature_view(project)
-    df, _ = fv.training_data(description="full read")
+def _normalise(df: pd.DataFrame) -> pd.DataFrame:
     # Hopsworks returns the event-time column as strings; downstream code (time
     # split, drift windows, inference sorting) needs real datetimes.
     df[EVENT_TIME] = pd.to_datetime(df[EVENT_TIME], errors="coerce")
     return df.sort_values(EVENT_TIME).reset_index(drop=True)
+
+
+def read_features(project, *, attempts: int | None = None,
+                  backoff: float | None = None) -> pd.DataFrame:
+    """Read the whole feature table, retrying a transient service failure.
+
+    The free-tier Arrow Flight service ("Hopsworks Feature Query Service")
+    intermittently drops the socket part-way through a large read, surfacing as
+    ``FlightUnavailableError: Socket closed`` with gRPC status 14 (UNAVAILABLE).
+    It is not deterministic - the identical read succeeds on other days - so the
+    remedy is to wait and try again rather than to read less history, which
+    would cost model quality.
+
+    Tune with AQI_FS_READ_ATTEMPTS and AQI_FS_READ_BACKOFF (seconds, multiplied
+    by the attempt number).
+    """
+    attempts = attempts if attempts is not None else READ_ATTEMPTS
+    backoff = backoff if backoff is not None else READ_BACKOFF
+    fv = get_feature_view(project)
+
+    last_exc: Exception | None = None
+    for attempt in range(1, max(1, attempts) + 1):
+        try:
+            df, _ = fv.training_data(description="full read")
+            if attempt > 1:
+                logger.info("Feature-store read succeeded on attempt %d/%d.", attempt, attempts)
+            return _normalise(df)
+        except Exception as exc:  # noqa: BLE001 - retried below, re-raised if final
+            last_exc = exc
+            if attempt >= attempts:
+                break
+            wait = backoff * attempt
+            logger.warning(
+                "Feature-store read attempt %d/%d failed (%s: %s); retrying in %.0fs.",
+                attempt, attempts, type(exc).__name__, str(exc)[:160], wait,
+            )
+            time.sleep(wait)
+
+    logger.error("Feature-store read failed after %d attempts.", attempts)
+    raise last_exc  # type: ignore[misc]

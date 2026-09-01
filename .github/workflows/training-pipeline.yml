@@ -37,13 +37,18 @@ jobs:
           HOPSWORKS_PROJECT: ${{ secrets.HOPSWORKS_PROJECT }}
         run: python -m aqi.pipelines.training_pipeline
 
+      # Runs even if training failed: inference needs only Open-Meteo and the
+      # champion already in the model registry, not the feature store. A flaky
+      # feature-store read must not cost the site its daily forecast refresh.
       - name: Batch inference (refresh forecasts)
+        if: always()
         env:
           HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
           HOPSWORKS_PROJECT: ${{ secrets.HOPSWORKS_PROJECT }}
         run: python -m aqi.pipelines.inference
 
       - name: Evaluation + drift monitoring
+        if: always()
         env:
           HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
           HOPSWORKS_PROJECT: ${{ secrets.HOPSWORKS_PROJECT }}
@@ -52,6 +57,7 @@ jobs:
           python -m aqi.monitoring || echo "monitoring skipped"
 
       - name: Commit refreshed artifacts
+        if: always()
         run: |
           git config user.name "aqi-bot"
           git config user.email "aqi-bot@users.noreply.github.com"

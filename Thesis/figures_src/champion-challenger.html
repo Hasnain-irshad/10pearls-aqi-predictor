@@ -1,6 +1,6 @@
 <!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="_style.css"></head>
 <body><div id="canvas">
-<svg width="1000" height="740" viewBox="0 0 1000 740">
+<svg width="1000" height="790" viewBox="0 0 1000 790">
   <defs>
     <marker id="a" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#2C6FB5"/></marker>
     <marker id="g" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#2E7D52"/></marker>
@@ -52,7 +52,7 @@
   <path d="M106,398 C106,440 300,442 460,448" stroke="#5C6B7A" stroke-width="1.8" fill="none" stroke-dasharray="4 3"/>
   <path d="M894,398 C894,440 700,442 540,448" stroke="#5C6B7A" stroke-width="1.8" fill="none" stroke-dasharray="4 3"/>
 
-  <rect x="120" y="452" width="760" height="164" rx="12" fill="#F7FAFD" stroke="#B9C6D6" stroke-width="1.6"/>
+  <rect x="120" y="452" width="760" height="208" rx="12" fill="#F7FAFD" stroke="#B9C6D6" stroke-width="1.6"/>
   <text x="500" y="478" text-anchor="middle" class="t-h">Both outcomes are appended to the persistent leaderboard</text>
 
   <line x1="150" y1="492" x2="850" y2="492" stroke="#B9C6D6"/>
@@ -69,21 +69,33 @@
   <text x="556" y="546" class="t-s">20.597</text>
   <text x="650" y="546" class="t-s" fill="#2E7D52">promoted - first champion</text>
 
-  <text x="168" y="572" class="t-s">2</text>
-  <text x="240" y="572" class="t-s">2026-08-28 14:28</text>
-  <text x="420" y="572" class="t-s">XGBoost</text>
-  <text x="556" y="572" class="t-s">19.687</text>
-  <text x="650" y="572" class="t-s" fill="#2E7D52">promoted - current champion</text>
+  <text x="168" y="568" class="t-s">2</text>
+  <text x="240" y="568" class="t-s">2026-08-28 14:28</text>
+  <text x="420" y="568" class="t-s">XGBoost</text>
+  <text x="556" y="568" class="t-s">19.687</text>
+  <text x="650" y="568" class="t-s" fill="#2E7D52">promoted - current champion</text>
 
-  <text x="168" y="598" class="t-s">3</text>
-  <text x="240" y="598" class="t-s">2026-08-28 15:28</text>
-  <text x="420" y="598" class="t-s">XGBoost</text>
-  <text x="556" y="598" class="t-s">19.687</text>
-  <text x="650" y="598" class="t-s" fill="#8d3444">rejected - tie, no improvement</text>
+  <text x="168" y="590" class="t-s">3</text>
+  <text x="240" y="590" class="t-s">2026-08-28 15:28</text>
+  <text x="420" y="590" class="t-s">XGBoost</text>
+  <text x="556" y="590" class="t-s">19.687</text>
+  <text x="650" y="590" class="t-s" fill="#8d3444">rejected - tie, no improvement</text>
 
-  <rect x="60" y="640" width="880" height="76" rx="12" fill="#E6F2EC" stroke="#2E7D52" stroke-width="1.6"/>
-  <text x="80" y="666" class="t-b">Why the gate exists</text>
-  <text x="80" y="688" class="t-s">A pipeline that retrains every night will otherwise ship whatever it produced last night. The gate makes a newer model prove itself before it can serve</text>
-  <text x="80" y="706" class="t-s">traffic, and the leaderboard leaves an auditable record of every model that was ever considered, promoted or refused.</text>
+  <text x="168" y="612" class="t-s">4</text>
+  <text x="240" y="612" class="t-s">2026-08-30 08:27</text>
+  <text x="420" y="612" class="t-s">XGBoost</text>
+  <text x="556" y="612" class="t-s">19.687</text>
+  <text x="650" y="612" class="t-s" fill="#8d3444">rejected - tie, no improvement</text>
+
+  <text x="168" y="634" class="t-s">5</text>
+  <text x="240" y="634" class="t-s">2026-08-31 08:47</text>
+  <text x="420" y="634" class="t-s">XGBoost</text>
+  <text x="556" y="634" class="t-s">19.687</text>
+  <text x="650" y="634" class="t-s" fill="#8d3444">rejected - tie, no improvement</text>
+
+  <rect x="60" y="686" width="880" height="76" rx="12" fill="#E6F2EC" stroke="#2E7D52" stroke-width="1.6"/>
+  <text x="80" y="712" class="t-b">Why the gate exists</text>
+  <text x="80" y="734" class="t-s">A pipeline that retrains every night will otherwise ship whatever it produced last night. The gate makes a newer model prove itself before it can serve</text>
+  <text x="80" y="752" class="t-s">traffic, and the leaderboard leaves an auditable record of every model that was ever considered, promoted or refused.</text>
 </svg>
 </div></body></html>

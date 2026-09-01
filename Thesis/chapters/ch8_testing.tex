@@ -193,16 +193,20 @@ GET /api/predict (arbitrary point) & 200 & 0.98\,s & On-demand forecast for a ci
 outside the supported list, confirming FR-22. \\
 POST /api/whatif & 200 & 1.15\,s & Baseline 38, scenario 39 under a raised wind
 speed; both categories returned. \\
-POST /api/chat & 503 & 0.74\,s & Returns the documented message that the advisor
-credential is not configured on the host. \\
+POST /api/chat & 200 & 9.1\,s & Grounded answer from the free Gemini tier; the
+reply names the cleanest day and cites the forecast values behind it. \\
+GET /api/advisor & 200 & 0.8\,s & Reports the selected provider and model. \\
+GET /api/advisor/models & 200 & 1.2\,s & Lists the model ids the configured key
+can use. \\
 \end{xltabular}
 
-Twelve of the thirteen endpoints serve their documented payload. The thirteenth
-behaves exactly as specified when its optional credential is absent: it returns a
-specific, actionable message rather than failing inside the client library. This
-is the intended behaviour of the exception path in use case UC-7, but it is also
-an honest limitation of the current deployment, and it is recorded as such in
-Section~\ref{sec:testing-threats}.
+All fifteen endpoints serve their documented payload. The advisor endpoint is the
+slowest by an order of magnitude, at 9.1 seconds, because a single call runs a
+tool round trip: the model asks for a forecast, the backend executes the real
+function, and the model then composes its answer from the value returned. With no
+credential configured it returns the specific 503 message described in use case
+UC-7 rather than failing inside a client library, which is the behaviour test
+TC-25 pins.
 
 \section{Functional Test Cases}
 Table~\ref{tab:testcases} records the functional test cases, the requirement each
@@ -263,7 +267,11 @@ FR-22 & Pass \\
 TC-24 & Confirm the hourly and daily workflows run to completion on schedule. &
 FR-23 & Pass \\
 TC-25 & Request the advisor with no credential configured. & NFR-11 & Pass -
-returns the documented 503 message. \\
+returns the documented 503 message naming the free providers. \\
+TC-26 & Ask the advisor a real question end to end. & FR-20 & Pass - answered
+from a get\_forecast tool call, not from model recall. \\
+TC-27 & Interrupt the feature-store read; confirm the nightly run still
+refreshes the forecast. & NFR-8 & Pass - inference is independent of training. \\
 \end{xltabular}
 
 \section{Model Evaluation}
@@ -535,18 +543,22 @@ Table~\ref{tab:leaderboard}.
 1 & 2026-08-19 17:32 & XGBoost & 20.597 & 0.824 & Promoted - first champion \\
 2 & 2026-08-28 14:28 & XGBoost & 19.687 & 0.850 & Promoted - current champion \\
 3 & 2026-08-28 15:28 & XGBoost & 19.687 & 0.850 & Rejected - no improvement \\
+4 & 2026-08-30 08:27 & XGBoost & 19.687 & 0.850 & Rejected - no improvement \\
+5 & 2026-08-31 08:47 & XGBoost & 19.687 & 0.850 & Rejected - no improvement \\
 \end{xltabular}
 
-The three rows demonstrate all three behaviours the gate is required to exhibit.
+The five rows demonstrate all three behaviours the gate is required to exhibit.
 Version~1 was promoted unconditionally as the first champion. Version~2, trained
 after the full historical backfill had completed, improved RMSE from 20.597 to
 19.687 - a 4.4\% reduction obtained purely from more history - and displaced the
 incumbent, which is the retraining loop delivering measurable value. Version~3,
 trained an hour later on effectively unchanged data, produced an identical 19.687
-and was refused, because the promotion rule requires strict improvement. That
-refusal is the most important row in the table: it is the system declining to
-replace its production model for no gain, which is precisely what the gate exists
-to do and what an ungated nightly retrain would not have done.
+and was refused, because the promotion rule requires strict improvement.
+Versions~4 and~5, on the two following nights, were refused for the same reason.
+Those three consecutive refusals are the most important rows in the table: they
+are the system declining, three nights running, to replace its production model
+for no gain, which is precisely what the gate exists to do and what an ungated
+nightly retrain would not have done.
 
 \subsection{Drift Monitoring in Production}
 Table~\ref{tab:drift} reports the drift status computed over the most recent
@@ -673,7 +685,7 @@ construction, the drift computation and the API handlers to integration and syst
 testing. Those components are exercised in production, but a regression in one of
 them would not be caught before deployment.
 
-\textbf{A short operational record.} The leaderboard contains three runs and the
+\textbf{A short operational record.} The leaderboard contains five runs and the
 realised-error monitor has not yet accumulated matured forecast-outcome pairs. The
 gate's behaviour is demonstrated but its long-run behaviour - how often a genuine
 improvement occurs, whether a degraded model is ever correctly refused - is not
@@ -717,9 +729,9 @@ recorded so that a reader can disagree with it.
 \section{Summary of Testing and Evaluation}
 This chapter reported twelve passing unit tests concentrated on the two
 components whose failures would be silent, four integration properties confirmed
-on live infrastructure, and thirteen endpoints exercised against the live
-deployment, twelve serving their documented payload and the thirteenth degrading
-exactly as specified. It reported the champion's accuracy - RMSE 19.69, MAE
+on live infrastructure, and fifteen endpoints exercised against the live
+deployment, all serving their documented payload, with the advisor degrading to a
+specific, actionable message when no credential is configured. It reported the champion's accuracy - RMSE 19.69, MAE
 12.80, $R^2$ 0.850 - against three alternatives, per-horizon accuracy against a
 per-horizon baseline, a five-fold walk-forward backtest averaging 20.55, a fair
 comparison with a recurrent sequence model, the global feature importance, the
