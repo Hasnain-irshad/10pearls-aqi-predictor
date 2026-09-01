@@ -8,15 +8,22 @@ Run locally:
 """
 from __future__ import annotations
 
-import json
-
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from aqi.config import CITIES, Location
+from aqi.config import CITIES, MODELS_DIR, PROCESSED_DIR, Location
+from aqi.data import published
 from aqi.data.aqi import AQI_CATEGORIES
 from aqi.pipelines.inference import PREDICTIONS_PATH, forecast_city
+
+# The four documents the pipelines publish, as (repository path, bundled path).
+# Reads go to the repository first so the API is as current as the last
+# pipeline run, not as current as the last image build; see aqi.data.published.
+_PREDICTIONS = ("data/processed/predictions.json", PREDICTIONS_PATH)
+_EVALUATION = ("data/processed/evaluation.json", PROCESSED_DIR / "evaluation.json")
+_MONITORING = ("data/processed/monitoring.json", PROCESSED_DIR / "monitoring.json")
+_LEADERBOARD = ("models_local/leaderboard.json", MODELS_DIR / "leaderboard.json")
 
 app = FastAPI(title="Pearls AQI Predictor API", version="0.1.0")
 
@@ -41,14 +48,28 @@ def _get_bundle():
 
 
 def _load_predictions() -> dict:
-    if not PREDICTIONS_PATH.exists():
+    data = published.load(*_PREDICTIONS)
+    if not data:
         raise HTTPException(status_code=503, detail="No predictions available yet. Run the inference pipeline.")
-    return json.loads(PREDICTIONS_PATH.read_text())
+    return data
 
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "predictions_ready": PREDICTIONS_PATH.exists()}
+    """Liveness, plus how fresh the served forecast actually is.
+
+    ``generated_at`` and ``forecast_source`` make staleness observable from
+    outside: 'repository' means the document was read from the last pipeline
+    run, 'bundled' means the copy baked into this image is being served because
+    the repository could not be reached.
+    """
+    data = published.load(*_PREDICTIONS) or {}
+    return {
+        "status": "ok",
+        "predictions_ready": bool(data),
+        "generated_at": data.get("generated_at"),
+        "forecast_source": published.source_of(_PREDICTIONS[0]),
+    }
 
 
 @app.get("/api/categories")
@@ -97,36 +118,32 @@ def predict_on_demand(name: str, lat: float, lon: float, province: str = "Custom
 @app.get("/api/leaderboard")
 def leaderboard():
     """Champion–Challenger model leaderboard."""
-    from aqi.models.leaderboard import current_champion, load_leaderboard
+    from aqi.models.leaderboard import current_champion
 
-    entries = load_leaderboard()
+    entries = published.load(*_LEADERBOARD, default=[]) or []
     return {"champion": current_champion(entries), "entries": entries}
 
 
 @app.get("/api/evaluation")
 def evaluation():
     """Per-horizon metrics + walk-forward backtest results."""
-    from aqi.config import PROCESSED_DIR
-
-    path = PROCESSED_DIR / "evaluation.json"
-    if not path.exists():
+    data = published.load(*_EVALUATION)
+    if not data:
         raise HTTPException(status_code=503, detail="Run the evaluation module first.")
-    return json.loads(path.read_text())
+    return data
 
 
 @app.get("/api/monitoring")
 def monitoring():
     """Data-drift status + forecast-error scoring.
 
-    Prefers the committed snapshot (written by the training pipeline) so a slim
+    Prefers the published snapshot (written by the training pipeline) so a slim
     deployment serves it without a live Feature Store connection; falls back to
     computing live, then to a friendly placeholder so the tab never hard-fails.
     """
-    from aqi.config import PROCESSED_DIR
-
-    snap = PROCESSED_DIR / "monitoring.json"
-    if snap.exists():
-        return json.loads(snap.read_text())
+    snap = published.load(*_MONITORING)
+    if snap:
+        return snap
     try:
         from aqi.monitoring import drift_report, forecast_error_report
 

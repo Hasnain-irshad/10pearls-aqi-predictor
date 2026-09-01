@@ -12,3 +12,8 @@ data/raw
 .env
 .env.*
 docs/images
+
+# Thesis sources: 16 MB of LaTeX, figures and PDF that the API never reads.
+Thesis
+Thesis_LaTeX
+context.md

@@ -6,7 +6,6 @@ grounded in our real forecasts and history — never invented.
 """
 from __future__ import annotations
 
-import json
 from functools import lru_cache
 
 import pandas as pd
@@ -25,9 +24,16 @@ def list_cities() -> list[dict]:
 
 
 def _load_predictions() -> dict:
-    if not PREDICTIONS_PATH.exists():
-        return {"cities": {}}
-    return json.loads(PREDICTIONS_PATH.read_text())
+    """The current forecast document.
+
+    Read through ``aqi.data.published`` so the advisor and the MCP server answer
+    from the latest pipeline run rather than from whatever copy happened to be
+    baked into the running image.
+    """
+    from aqi.data import published
+
+    return published.load("data/processed/predictions.json", PREDICTIONS_PATH,
+                          default={"cities": {}}) or {"cities": {}}
 
 
 def get_forecast(city: str) -> dict:
