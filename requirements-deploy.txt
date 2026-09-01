@@ -23,5 +23,7 @@ joblib>=1.3
 # explainability (What-If / SHAP explanation endpoints)
 shap>=0.44
 
-# LLM advisor (needs ANTHROPIC_API_KEY at runtime)
-anthropic>=0.40
+# LLM advisor: no vendor SDK. aqi.llm talks to Gemini / Groq / Anthropic over
+# plain REST with `requests` (already required above), so the provider can be
+# switched with an environment variable and the image stays slim.
+# Set GEMINI_API_KEY or GROQ_API_KEY (both have free tiers) at runtime.

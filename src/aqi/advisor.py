@@ -1,31 +1,31 @@
-"""LLM air-quality advisor — answers natural-language questions grounded in our
-real forecasts via tool use (Claude).
+"""LLM air-quality advisor - answers questions grounded in our real forecasts.
 
-This is the "wow" layer: a user asks *"I have asthma — is it safe to jog in
+This is the "wow" layer: a user asks *"I have asthma - is it safe to jog in
 Lahore tomorrow?"* and the model calls our ``get_forecast`` tool, reads the real
 number, and gives grounded health advice. The same tools are exposed over MCP
-(``aqi.mcp.server``) so the system also plugs into Claude Desktop.
+(``aqi.mcp.server``), so the dashboard advisor and any external protocol client
+answer from exactly the same data.
 
-Needs ANTHROPIC_API_KEY in the environment. Model defaults to Claude Opus 5
-(override with AQI_ADVISOR_MODEL).
+The provider is pluggable (see ``aqi.llm``) because the advisor should not
+depend on a paid account. With no configuration it uses whichever of
+GEMINI_API_KEY, GROQ_API_KEY or ANTHROPIC_API_KEY is present, preferring the
+free tiers. Force one with AQI_ADVISOR_PROVIDER=gemini|groq|claude and override
+the model with AQI_ADVISOR_MODEL.
 """
 from __future__ import annotations
 
-import json
-import os
-
+from aqi.llm import ProviderError, available, chat_with_tools, model_for, resolve_provider
 from aqi.tools import TOOL_SCHEMAS, run_tool
 from aqi.utils.logging import get_logger
 
 logger = get_logger("advisor")
 
-MODEL = os.getenv("AQI_ADVISOR_MODEL", "claude-opus-5")
 MAX_TOOL_ROUNDS = 6
 
 SYSTEM_PROMPT = (
     "You are the air-quality health advisor for the Pearls AQI Predictor, which "
     "forecasts the Air Quality Index for cities across Pakistan. "
-    "Ground every AQI number in real data by calling the tools — never invent "
+    "Ground every AQI number in real data by calling the tools - never invent "
     "values. For questions about upcoming conditions or whether it's safe to be "
     "outside, call get_forecast; for typical or seasonal air quality, call "
     "get_history_summary. Give practical, concise health guidance: who is at risk "
@@ -35,50 +35,49 @@ SYSTEM_PROMPT = (
 )
 
 
+def is_configured() -> bool:
+    """True when at least one provider has a key set."""
+    return bool(available())
+
+
+def status() -> dict:
+    """What the advisor would use, for /api/health and for diagnostics."""
+    try:
+        provider = resolve_provider()
+    except ProviderError as exc:
+        return {"configured": False, "detail": str(exc)}
+    if provider is None:
+        return {
+            "configured": False,
+            "detail": ("No advisor key configured. Set GEMINI_API_KEY (free at "
+                       "aistudio.google.com) or GROQ_API_KEY (free at console.groq.com)."),
+        }
+    return {
+        "configured": True,
+        "provider": provider.name,
+        "model": model_for(provider),
+        "available": available(),
+    }
+
+
 def answer(question: str, history: list[dict] | None = None) -> dict:
-    """Answer a question, using tools as needed. Returns {answer, stop_reason}."""
-    import anthropic
+    """Answer a question, using the grounded tools as needed.
 
-    client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from the environment
-    messages: list[dict] = list(history or []) + [{"role": "user", "content": question}]
-
-    for _ in range(MAX_TOOL_ROUNDS):
-        resp = client.messages.create(
-            model=MODEL,
-            max_tokens=2048,
-            system=SYSTEM_PROMPT,
-            tools=TOOL_SCHEMAS,
-            output_config={"effort": "low"},  # keep the advisor snappy; tools do the work
-            messages=messages,
-        )
-
-        if resp.stop_reason == "refusal":
-            return {"answer": "I can't help with that request.", "stop_reason": "refusal"}
-
-        if resp.stop_reason == "tool_use":
-            messages.append({"role": "assistant", "content": resp.content})
-            tool_results = []
-            for block in resp.content:
-                if block.type == "tool_use":
-                    result = run_tool(block.name, dict(block.input))
-                    logger.info("tool %s(%s)", block.name, block.input)
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": json.dumps(result, default=str),
-                    })
-            messages.append({"role": "user", "content": tool_results})
-            continue
-
-        # end_turn (or any other terminal reason): return the assistant text
-        text = "".join(b.text for b in resp.content if b.type == "text")
-        return {"answer": text.strip(), "stop_reason": resp.stop_reason}
-
-    return {"answer": "Sorry — I couldn't complete that. Please rephrase.", "stop_reason": "max_rounds"}
+    Returns ``{answer, stop_reason, provider, model, tools_used}``.
+    """
+    return chat_with_tools(
+        question,
+        history,
+        system=SYSTEM_PROMPT,
+        tools=TOOL_SCHEMAS,
+        run_tool=run_tool,
+        max_rounds=MAX_TOOL_ROUNDS,
+    )
 
 
 if __name__ == "__main__":
     import sys
 
+    print("advisor status:", status())
     q = " ".join(sys.argv[1:]) or "I have asthma. Is it safe to jog in Lahore tomorrow morning?"
     print(answer(q)["answer"])

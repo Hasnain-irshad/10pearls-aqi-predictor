@@ -6,5 +6,4 @@
 fastapi>=0.110
 uvicorn[standard]>=0.29
 # AI advisor (optional) — LLM chatbot + MCP server
-anthropic>=0.40
 mcp>=1.0

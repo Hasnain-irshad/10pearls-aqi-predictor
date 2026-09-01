@@ -198,17 +198,26 @@ class ChatRequest(BaseModel):
 
 @app.post("/api/chat")
 def chat(req: ChatRequest):
-    """LLM air-quality advisor grounded in our forecasts (needs ANTHROPIC_API_KEY)."""
-    import os
+    """LLM air-quality advisor grounded in our forecasts.
 
-    if not os.getenv("ANTHROPIC_API_KEY"):
-        raise HTTPException(
-            status_code=503,
-            detail="Advisor unavailable: set ANTHROPIC_API_KEY to enable the AI assistant.",
-        )
-    from aqi.advisor import answer
+    Works with whichever provider has a key configured - Gemini or Groq (both
+    free) or Claude. See aqi.llm for the selection order.
+    """
+    from aqi.advisor import answer, status
+
+    state = status()
+    if not state["configured"]:
+        raise HTTPException(status_code=503, detail=f"Advisor unavailable: {state['detail']}")
 
     try:
         return answer(req.question, req.history)
     except Exception as exc:  # surface a clean message to the UI
         raise HTTPException(status_code=502, detail=f"Advisor error: {exc}")
+
+
+@app.get("/api/advisor")
+def advisor_status():
+    """Which advisor provider and model this deployment would use, if any."""
+    from aqi.advisor import status
+
+    return status()
