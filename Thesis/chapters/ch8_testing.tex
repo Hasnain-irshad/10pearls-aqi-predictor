@@ -527,7 +527,9 @@ The leaderboard is the record of the gate's behaviour, and is reproduced in
 Table~\ref{tab:leaderboard}.
 
 \begin{xltabular}{\textwidth}{C P{3.0cm} P{2.0cm} C C Y}
-\caption{The production model leaderboard.}\label{tab:leaderboard}\\
+\caption{The production model leaderboard, as recorded on 31~August~2026. The
+leaderboard grows by one row per nightly run, so these rows are a snapshot rather
+than a final state.}\label{tab:leaderboard}\\
 \toprule
 \bfseries Ver & \bfseries Trained & \bfseries Model & \bfseries RMSE &
 \bfseries $R^2$ & \bfseries Outcome \\
@@ -685,7 +687,8 @@ construction, the drift computation and the API handlers to integration and syst
 testing. Those components are exercised in production, but a regression in one of
 them would not be caught before deployment.
 
-\textbf{A short operational record.} The leaderboard contains five runs and the
+\textbf{A short operational record.} The leaderboard held five runs when this was
+written and has continued to grow since; the
 realised-error monitor has not yet accumulated matured forecast-outcome pairs. The
 gate's behaviour is demonstrated but its long-run behaviour - how often a genuine
 improvement occurs, whether a degraded model is ever correctly refused - is not
