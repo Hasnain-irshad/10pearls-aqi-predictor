@@ -208,5 +208,40 @@
     "is_champion": false,
     "promoted": false,
     "prev_champion_rmse": 19.687
+  },
+  {
+    "version": 7,
+    "trained_at": "2026-09-02T07:14:06",
+    "model": "XGBoost",
+    "rmse": 19.687,
+    "mae": 12.804,
+    "r2": 0.85,
+    "n_train": 160002,
+    "n_valid": 39998,
+    "candidates": {
+      "Persistence (baseline)": {
+        "rmse": 25.269,
+        "mae": 15.711,
+        "r2": 0.752
+      },
+      "Ridge": {
+        "rmse": 22.854,
+        "mae": 16.014,
+        "r2": 0.797
+      },
+      "RandomForest": {
+        "rmse": 20.384,
+        "mae": 13.563,
+        "r2": 0.839
+      },
+      "XGBoost": {
+        "rmse": 19.687,
+        "mae": 12.804,
+        "r2": 0.85
+      }
+    },
+    "is_champion": false,
+    "promoted": false,
+    "prev_champion_rmse": 19.687
   }
 ]
