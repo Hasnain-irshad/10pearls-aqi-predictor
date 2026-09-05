@@ -62,7 +62,7 @@ reference/
 !models_local/aqi_model.joblib
 !models_local/aqi_model_meta.json
 
-# LaTeX build artefacts (the compiled Thesis/main.pdf IS committed)
+# LaTeX build artefacts (the compiled report PDF is committed)
 *.aux
 *.fdb_latexmk
 *.fls

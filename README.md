@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://10pearlsaqi.me"><b>🔗 Live Dashboard</b></a> ·
-  <a href="Thesis/main.pdf"><b>📄 Project Report (PDF, 131 pp)</b></a> ·
+  <a href="Thesis/Pearls_AQI_Predictor_Project_Report.pdf"><b>📄 Project Report (PDF, 132 pp)</b></a> ·
   <a href="notebooks/eda.ipynb"><b>📊 EDA Notebook</b></a> ·
   <a href="https://aqi-backend-production-5af4.up.railway.app/api/health"><b>⚙️ API</b></a>
 </p>
@@ -34,7 +34,7 @@ prediction-interval charts.
 | **Dashboard** | **https://10pearlsaqi.me** |
 | **Backend API** | https://aqi-backend-production-5af4.up.railway.app |
 | **GitHub repository** | https://github.com/Hasnain-irshad/10pearls-aqi-predictor |
-| **Project report** | [`Thesis/main.pdf`](Thesis/main.pdf) — 131 pages, 35 figures, 23 tables |
+| **Project report** | [`Thesis/Pearls_AQI_Predictor_Project_Report.pdf`](Thesis/Pearls_AQI_Predictor_Project_Report.pdf) — 132 pages, 36 figures, 23 tables |
 | **EDA notebook** | [`notebooks/eda.ipynb`](notebooks/eda.ipynb) — executed, with outputs |
 
 The dashboard is refreshed by the hourly feature-and-inference workflow and retrained by
@@ -174,7 +174,7 @@ Regenerate the figures with `python -m aqi.eda`.
 .
 ├── README.md                     ← you are here
 ├── Thesis/                       📄 THE PROJECT REPORT
-│   ├── main.pdf                     compiled project report
+│   ├── Pearls_AQI_Predictor_Project_Report.pdf  final project report
 │   ├── chapters/                    ch1–ch10 LaTeX sources
 │   ├── figures/                     diagrams, screenshots and analysis charts
 │   └── figures_src/                 diagram sources + render/screenshot scripts
@@ -313,7 +313,7 @@ carries any cost.
 
 | Document | |
 |---|---|
-| [`Thesis/main.pdf`](Thesis/main.pdf) | **Full project report** — 131 pp: introduction, literature review, problem, requirements, design, implementation, UI, testing & evaluation, conclusion |
+| [`Thesis/Pearls_AQI_Predictor_Project_Report.pdf`](Thesis/Pearls_AQI_Predictor_Project_Report.pdf) | **Full project report** — 132 pp: introduction, literature review, problem, requirements, design, implementation, UI, testing & evaluation, conclusion |
 | [`notebooks/eda.ipynb`](notebooks/eda.ipynb) | Executed exploratory analysis |
 | [`docs/eda_findings.md`](docs/eda_findings.md) | EDA summary |
 | [`docs/evaluation.md`](docs/evaluation.md) | Per-horizon + walk-forward results |
