@@ -109,6 +109,19 @@ const AnalyticsPage = () => {
         .slice(0, 15)
         .reverse()
     : [];
+  const strongestFeature = [...(shapData.features || [])].sort((a, b) => b.importance - a.importance)[0];
+  const highestRiskCity = [...(stats.city_ranking || [])].sort((a, b) => b.mean_aqi - a.mean_aqi)[0];
+  const strongestCorrelation = (() => {
+    const features = stats.correlation?.features || [];
+    const matrix = stats.correlation?.matrix || [];
+    let strongest = { value: 0, left: "", right: "" };
+    matrix.forEach((row, rowIndex) => row.forEach((value, colIndex) => {
+      if (rowIndex < colIndex && Math.abs(value) > Math.abs(strongest.value)) {
+        strongest = { value, left: features[rowIndex], right: features[colIndex] };
+      }
+    }));
+    return strongest;
+  })();
 
   return (
     <div className="analytics-page">
@@ -222,6 +235,29 @@ const AnalyticsPage = () => {
         </p>
       </div>
 
+      <div className="analytics-summary" aria-label="Analytics highlights">
+        <div className="analytics-stat">
+          <span className="analytics-stat-label">Observations</span>
+          <strong>{(stats.distribution || []).reduce((sum, bin) => sum + bin.count, 0).toLocaleString()}</strong>
+          <span className="analytics-stat-note">historical AQI records</span>
+        </div>
+        <div className="analytics-stat accent-cyan">
+          <span className="analytics-stat-label">Top SHAP driver</span>
+          <strong>{strongestFeature?.label || "Unavailable"}</strong>
+          <span className="analytics-stat-note">mean impact {strongestFeature?.importance?.toFixed(1) || "-"} AQI points</span>
+        </div>
+        <div className="analytics-stat accent-orange">
+          <span className="analytics-stat-label">Highest city average</span>
+          <strong>{highestRiskCity?.city || "Unavailable"}</strong>
+          <span className="analytics-stat-note">AQI {highestRiskCity?.mean_aqi?.toFixed(1) || "-"}</span>
+        </div>
+        <div className="analytics-stat accent-violet">
+          <span className="analytics-stat-label">Strongest relationship</span>
+          <strong>{strongestCorrelation.left && strongestCorrelation.right ? `${strongestCorrelation.left} / ${strongestCorrelation.right}` : "Unavailable"}</strong>
+          <span className="analytics-stat-note">Pearson r {strongestCorrelation.value.toFixed(2)}</span>
+        </div>
+      </div>
+
       <div className="analytics-grid">
         {/* 1. Global SHAP Feature Importance */}
         <div className="panel-card full-width">
@@ -283,9 +319,20 @@ const AnalyticsPage = () => {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" vertical={false} />
-                <XAxis dataKey="bin_start" stroke="#94a3b8" />
+                <XAxis
+                  dataKey="min"
+                  stroke="#94a3b8"
+                  tickFormatter={(value) => Math.round(value)}
+                  label={{ value: "AQI range", position: "insideBottom", offset: -4, fill: "#94a3b8" }}
+                />
                 <YAxis stroke="#94a3b8" />
-                <Tooltip contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} cursor={{ fill: "rgba(255,255,255,0.05)" }} />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  itemStyle={tooltipItemStyle}
+                  cursor={{ fill: "rgba(255,255,255,0.05)" }}
+                  labelFormatter={(value) => `AQI ${Math.round(value)}`}
+                  formatter={(value) => [Number(value).toLocaleString(), "records"]}
+                />
                 
                 <ReferenceLine x={50} stroke={CATEGORY_COLORS["Good"]} strokeDasharray="3 3" label={{ position: 'top', value: '50', fill: CATEGORY_COLORS["Good"], fontSize: 12 }} />
                 <ReferenceLine x={100} stroke={CATEGORY_COLORS["Moderate"]} strokeDasharray="3 3" label={{ position: 'top', value: '100', fill: CATEGORY_COLORS["Moderate"], fontSize: 12 }} />

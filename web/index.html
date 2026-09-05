@@ -8,6 +8,13 @@
     <link rel="icon" type="image/png" href="/logo-round.png" />
     <link rel="apple-touch-icon" href="/logo-round.png" />
     <title>Pearls AQI Predictor</title>
+    <script>
+      if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+      window.scrollTo(0, 0);
+      const resetInitialScroll = () => window.scrollTo(0, 0);
+      window.addEventListener("load", resetInitialScroll, { once: true });
+      window.addEventListener("pageshow", resetInitialScroll);
+    </script>
     <style>
       /* Pre-JS paint — matches the React SplashScreen so they crossfade cleanly */
       #splash {

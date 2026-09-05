@@ -12,6 +12,9 @@ concurrency:
   group: hopsworks-write # shared with the backfill so they never write concurrently
   cancel-in-progress: false
 
+permissions:
+  contents: write # publish the forecast snapshot consumed by the dashboard
+
 jobs:
   run-feature-pipeline:
     runs-on: ubuntu-latest
@@ -31,3 +34,19 @@ jobs:
           HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
           HOPSWORKS_PROJECT: ${{ secrets.HOPSWORKS_PROJECT }}
         run: python -m aqi.pipelines.feature_pipeline --past-days 7
+
+      - name: Batch inference (refresh forecasts)
+        if: always()
+        env:
+          HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
+          HOPSWORKS_PROJECT: ${{ secrets.HOPSWORKS_PROJECT }}
+        run: python -m aqi.pipelines.inference
+
+      - name: Commit refreshed forecast
+        if: always()
+        run: |
+          git config user.name "aqi-bot"
+          git config user.email "aqi-bot@users.noreply.github.com"
+          git add -f data/processed/predictions.json
+          git commit -m "chore: refresh hourly forecasts [skip ci]" || echo "no changes"
+          git push || echo "nothing to push"

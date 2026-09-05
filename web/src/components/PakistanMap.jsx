@@ -15,8 +15,8 @@ export default function PakistanMap({ cities, selected, onSelect }) {
       <h3>Live AQI map</h3>
       <MapContainer center={[30.4, 69.3]} zoom={5} className="map" scrollWheelZoom={false}>
         <TileLayer
-          attribution='&copy; OpenStreetMap'
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         {points.map((p) => (
           <CircleMarker

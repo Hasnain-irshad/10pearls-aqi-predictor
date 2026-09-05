@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { api, STATIC_MODE } from "./api";
 import Header from "./components/Header.jsx";
 import CitySelect from "./components/CitySelect.jsx";
@@ -50,6 +50,23 @@ export default function App() {
     const t = setTimeout(() => setMinElapsed(true), SPLASH_MIN_MS);
     return () => clearTimeout(t);
   }, []);
+
+  useLayoutEffect(() => {
+    if ("scrollRestoration" in window.history) window.history.scrollRestoration = "manual";
+    const resetScroll = () => {
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    };
+    resetScroll();
+    const frame = window.requestAnimationFrame(() => {
+      resetScroll();
+      window.setTimeout(resetScroll, 0);
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [tab, data]);
 
   // Once the min time has passed AND data (or an error) is in, fade the intro out.
   useEffect(() => {

@@ -51,7 +51,7 @@ const AqiGauge = ({ value = 0, size = 240 }) => {
       segs.push({
         path,
         color: interval.color,
-        isActive: value > (startFrac === 0 ? -1 : startFrac) && value <= interval.max,
+        isActive: value > (startFrac === 0 ? -1 : intervals[segs.length - 1].max) && value <= interval.max,
         max: interval.max
       });
       startFrac = endFrac;
@@ -68,6 +68,8 @@ const AqiGauge = ({ value = 0, size = 240 }) => {
   return (
     <div 
       className="aqi-gauge-container" 
+      role="img"
+      aria-label={`Current AQI ${value}, ${currentCategory.name || "Unknown"}`}
       style={{ 
         width: size, 
         position: 'relative', 
@@ -159,6 +161,9 @@ const AqiGauge = ({ value = 0, size = 240 }) => {
       >
         <div style={{ fontSize: '36px', fontWeight: 'bold', color: 'white', lineHeight: '1' }}>
           {value}
+        </div>
+        <div style={{ fontSize: '10px', color: 'var(--muted, #8a97a8)', letterSpacing: '0.12em', textTransform: 'uppercase', marginTop: '5px' }}>
+          US EPA AQI
         </div>
         <div 
           style={{ 

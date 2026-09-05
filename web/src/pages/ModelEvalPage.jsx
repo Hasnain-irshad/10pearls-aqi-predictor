@@ -17,6 +17,20 @@ export default function ModelEvalPage() {
 
   if (err) return <div className="notice error">Couldn't load model evaluation ({err}).</div>;
 
+  const candidateRows = (lb?.entries || []).slice().reverse().flatMap((entry) => {
+    const candidates = entry.candidates || {
+      [entry.model]: { rmse: entry.rmse, mae: entry.mae, r2: entry.r2 },
+    };
+    return Object.entries(candidates).map(([model, metrics]) => ({
+      ...metrics,
+      version: entry.version,
+      trained_at: entry.trained_at,
+      model,
+      is_champion: entry.is_champion && model === entry.model,
+      promoted: entry.promoted && model === entry.model,
+    }));
+  });
+
   return (
     <div className="col-main">
       {/* Leaderboard */}
@@ -32,11 +46,11 @@ export default function ModelEvalPage() {
           <table className="data-table">
             <thead><tr><th>Ver</th><th>Trained</th><th>Model</th><th>RMSE</th><th>MAE</th><th>R²</th><th>Result</th></tr></thead>
             <tbody>
-              {(lb?.entries || []).slice().reverse().map((e) => (
-                <tr key={e.version} className={e.is_champion ? "row-champ" : ""}>
+              {candidateRows.map((e) => (
+                <tr key={`${e.version}-${e.model}`} className={e.is_champion ? "row-champ" : ""}>
                   <td>{e.version}</td><td>{String(e.trained_at).slice(0, 16)}</td><td>{e.model}</td>
                   <td>{e.rmse}</td><td>{e.mae}</td><td>{e.r2}</td>
-                  <td>{e.is_champion ? "🏆 champion" : e.promoted ? "promoted" : "rejected"}</td>
+                  <td>{e.is_champion ? "🏆 champion" : e.promoted ? "promoted" : "candidate"}</td>
                 </tr>
               ))}
             </tbody>
