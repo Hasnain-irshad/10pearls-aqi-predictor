@@ -7,10 +7,14 @@
 
 <p align="center">
   <a href="https://10pearlsaqi.me"><b>🔗 Live Dashboard</b></a> ·
-  <a href="Thesis/main.pdf"><b>📄 Project Report (PDF, 127 pp)</b></a> ·
+  <a href="Thesis/main.pdf"><b>📄 Project Report (PDF, 131 pp)</b></a> ·
   <a href="notebooks/eda.ipynb"><b>📊 EDA Notebook</b></a> ·
   <a href="https://aqi-backend-production-5af4.up.railway.app/api/health"><b>⚙️ API</b></a>
 </p>
+
+The dashboard is a **React (Vite)** single-page app, not Streamlit. It was upgraded from
+the original Streamlit plan to support the five-tab layout, the interactive map and the
+prediction-interval charts.
 
 <p align="center">
   <img alt="Feature pipeline" src="https://img.shields.io/badge/feature%20pipeline-hourly-2ea44f">
@@ -29,12 +33,12 @@
 |---|---|
 | **Dashboard** | **https://10pearlsaqi.me** |
 | **Backend API** | https://aqi-backend-production-5af4.up.railway.app |
-| **Project report** | [`Thesis/main.pdf`](Thesis/main.pdf) — 127 pages, 35 figures, 23 tables |
+| **Project report** | [`Thesis/main.pdf`](Thesis/main.pdf) — 131 pages, 35 figures, 23 tables |
 | **EDA notebook** | [`notebooks/eda.ipynb`](notebooks/eda.ipynb) — executed, with outputs |
 
-> The dashboard is a **React (Vite)** single-page app, not Streamlit. It was upgraded from
-> the original Streamlit plan to support the four-tab layout, the interactive map and the
-> prediction-interval charts.
+The dashboard is refreshed by the hourly feature-and-inference workflow and retrained by
+the daily training workflow. Its header exposes the timestamp of the forecast document
+being served, so stale data is visible rather than hidden.
 
 ---
 
@@ -46,7 +50,6 @@ actually protect health are made *in advance*: whether to keep a child indoors, 
 move outdoor work, whether an asthmatic should carry a mask.
 
 This project forecasts the **US EPA Air Quality Index up to 72 hours ahead for 22 cities**
-spanning every province plus Islamabad Capital Territory, Gilgit–Baltistan and Azad Jammu &
 Kashmir. More importantly, it is a **system rather than a model**: it ingests fresh data
 every hour, retrains every night, refuses to deploy a model that isn't measurably better,
 explains every prediction, and monitors its own drift and error — all on free
@@ -56,12 +59,12 @@ infrastructure.
 
 | | |
 |---|---|
-| 🔁 **Retrains itself nightly** | Hourly ingestion + daily training, on scheduled runners |
+| 🔁 **Keeps itself current** | Hourly ingestion + hourly forecast publication + daily training, on scheduled runners |
 | 🏆 **Gated promotion** | A new model ships *only* if it beats the champion's RMSE — a tie is refused |
 | 📦 **Durable model registry** | The champion survives the ephemeral runner that trained it |
 | 📉 **Honest evaluation** | Per-horizon metrics + 5-fold walk-forward backtest, not one averaged number |
 | 🎯 **Uncertainty** | 80% prediction interval per point, widening with lead time |
-| 🧠 **Explained** | SHAP attributions rendered as plain English on every forecast |
+| 🧠 **Explained** | Global and per-city SHAP attributions rendered as plain English |
 | 🎛️ **Interrogable** | What-if simulator: change the drivers, watch the model re-predict |
 | 🩺 **Self-monitoring** | PSI drift per feature + forecasts scored against what actually happened |
 | 💬 **Grounded advisor** | LLM answers via tool calls into the real forecast (free Gemini/Groq tier) |
@@ -79,7 +82,7 @@ be disposable, and therefore free.
                     │                                                                            │
  Open-Meteo  ──────▶│  1. Feature pipeline   hourly   fetch → engineer → upsert (22 cities)      │
  (free, keyless)    │  2. Training pipeline  daily    supervised set → 4 candidates → GATE       │
-                    │  3. Inference pipeline batch    champion → 72 h curve + intervals + SHAP   │
+                    │  3. Inference pipeline hourly   champion → 72 h curve + intervals + SHAP   │
                     └────────────────┬──────────────────────────────────┬────────────────────────┘
                                      │ write                            │ read champion
                                      ▼                                  ▲
@@ -109,7 +112,7 @@ validation) — never randomly.
 | Model | RMSE | MAE | R² | |
 |---|---:|---:|---:|---|
 | **XGBoost** | **19.69** | **12.80** | **0.850** | ← promoted champion |
-| Random forest | 20.38 | 13.56 | 0.839 | |
+  │       ├── App.jsx                  5 tabs: Forecast, Analytics & SHAP, Evaluation, Monitoring, What-If
 | Ridge regression | 22.85 | 16.01 | 0.797 | linear reference |
 | Persistence (baseline) | 25.27 | 15.71 | 0.752 | not eligible to ship |
 
@@ -120,7 +123,6 @@ validation) — never randomly.
 
 Error grows with lead time, and this is published rather than hidden:
 
-| Horizon | 1 h | 3 h | 6 h | 12 h | 24 h | 48 h | 72 h |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | **RMSE** | 6.10 | 7.88 | 10.61 | 14.78 | 21.72 | 27.56 | 27.55 |
 | **R²** | 0.985 | 0.975 | 0.957 | 0.917 | 0.819 | 0.708 | 0.695 |
@@ -156,7 +158,6 @@ Across **696,960 hourly rows**, 22 cities, Jan 2023 → Aug 2026:
 | Finding | What it changed in the design |
 |---|---|
 | **Faisalabad (156.9) is worse than Lahore (151.5)**; Gilgit cleanest at 75.7 — a 2.07× spread | Justifies multi-city scope; the city that gets all the attention isn't the worst |
-| **January 146.8 vs April 91.5**, winter/summer ≈ 1.25× | Cyclical month encoding; seasonal drift is *expected*, not a fault |
 | **Evening peak 18:00 (123.1), morning low 09:00 (108.1)** | Cyclical hour encoding; the hourly view helps users find a safer time |
 | **No dominant weather driver** (strongest \|r\| = 0.32, surface pressure) | A non-linear model with interactions, not a linear one |
 | **Target is right-skewed** (skew 1.74) | Empirical residual quantiles for intervals, not a symmetric Gaussian |
@@ -172,9 +173,9 @@ Regenerate the figures with `python -m aqi.eda`.
 .
 ├── README.md                     ← you are here
 ├── Thesis/                       📄 THE PROJECT REPORT
-│   ├── main.pdf                     compiled, 127 pages
+│   ├── main.pdf                     compiled project report
 │   ├── chapters/                    ch1–ch10 LaTeX sources
-│   ├── figures/                     24 figures (diagrams, screenshots, charts)
+│   ├── figures/                     diagrams, screenshots and analysis charts
 │   └── figures_src/                 diagram sources + render/screenshot scripts
 ├── notebooks/
 │   └── eda.ipynb                 📊 exploratory analysis, executed with outputs
@@ -193,7 +194,7 @@ Regenerate the figures with `python -m aqi.eda`.
 │   │   ├── feature_pipeline.py      hourly
 │   │   ├── backfill.py              one-off history load, resumable
 │   │   ├── training_pipeline.py     daily: train → gate → register
-│   │   └── inference.py             batch: 72 h forecast + intervals + SHAP
+│   │   └── inference.py              hourly: 72 h forecast + intervals + SHAP
 │   ├── models/
 │   │   ├── registry.py              bundle save/load
 │   │   ├── leaderboard.py           champion–challenger promotion gate
@@ -204,18 +205,17 @@ Regenerate the figures with `python -m aqi.eda`.
 │   ├── llm.py                       pluggable LLM provider (Gemini | Groq | Claude)
 │   ├── advisor.py                   grounded advisor
 │   ├── tools.py                     the 4 tools the advisor and MCP both use
-│   ├── mcp/server.py                Model Context Protocol server
 │   ├── monitoring.py                PSI drift + realised forecast error
 │   ├── whatif.py                    what-if simulator
 │   ├── alerts.py                    hazard thresholds
 │   └── eda.py                       EDA figures + findings
 ├── web/                          React (Vite) dashboard
 │   └── src/
-│       ├── App.jsx                  4 tabs
+│       ├── App.jsx                  5 tabs: Forecast, Analytics & SHAP, Evaluation, Monitoring, What-If
 │       ├── components/              chart, map, legend, chat, SHAP card, …
-│       ├── pages/                   ModelEval, Monitoring, WhatIf
+│       ├── pages/                   Analytics, ModelEval, Monitoring, WhatIf
 │       └── markdown.js              renders advisor replies
-├── tests/                        26 unit tests
+├── tests/                        unit tests for AQI, features, statistics and storage
 ├── docs/                         EDA findings, metrics, leaderboard, monitoring, figures
 ├── .github/workflows/            3 scheduled pipelines
 ├── Dockerfile                    slim backend image
@@ -241,7 +241,8 @@ pipeline runs offline.
 
 ```bash
 python -m aqi.pipelines.backfill --start 2024-01-01   # load history (once)
-python -m aqi.pipelines.feature_pipeline              # hourly step
+python -m aqi.pipelines.feature_pipeline              # hourly feature-store step
+python -m aqi.pipelines.inference                     # hourly forecast publication
 python -m aqi.pipelines.training_pipeline             # train + promotion gate
 python -m aqi.pipelines.inference                     # write predictions.json
 python -m aqi.models.evaluate                         # per-horizon + backtest
@@ -299,7 +300,7 @@ your key can actually use.
 |---|---|---|
 | Frontend | Vercel (edge, static) | `cd web && vercel deploy --prod` |
 | Backend | Railway (Docker) | `railway up --ci --service aqi-backend` |
-| Pipelines | GitHub Actions | 3 scheduled workflows |
+| Pipelines | GitHub Actions | hourly features + hourly inference + daily training |
 | State | Hopsworks Serverless | free tier |
 
 Running cost is **effectively zero**: ingestion is free and keyless, compute uses free CI
@@ -312,7 +313,7 @@ carries any cost.
 
 | Document | |
 |---|---|
-| [`Thesis/main.pdf`](Thesis/main.pdf) | **Full project report** — 127 pp: introduction, literature review, problem, requirements, design, implementation, UI, testing & evaluation, conclusion |
+| [`Thesis/main.pdf`](Thesis/main.pdf) | **Full project report** — 131 pp: introduction, literature review, problem, requirements, design, implementation, UI, testing & evaluation, conclusion |
 | [`notebooks/eda.ipynb`](notebooks/eda.ipynb) | Executed exploratory analysis |
 | [`docs/eda_findings.md`](docs/eda_findings.md) | EDA summary |
 | [`docs/evaluation.md`](docs/evaluation.md) | Per-horizon + walk-forward results |

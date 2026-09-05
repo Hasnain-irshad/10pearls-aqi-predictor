@@ -38,7 +38,10 @@ SHAP attributions; a what-if simulator lets a user perturb the drivers and watch
 the model respond; and the system monitors itself for feature drift and scores
 its own past forecasts against the air quality that actually arrived. The results
 are delivered through a FastAPI service and a React dashboard deployed to the
-public internet, together with a Model Context Protocol server exposing the same
-grounded tools to a language-model advisor.
+public internet. The dashboard includes a live AQI meter, a colour-coded city map,
+forecast intervals, a global SHAP importance view, per-city explanations,
+distribution and correlation charts, model evaluation, drift monitoring and a
+what-if simulator. A Model Context Protocol server exposes the same grounded tools
+to a language-model advisor.
 
 \clearpage

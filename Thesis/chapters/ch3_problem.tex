@@ -176,7 +176,7 @@ incumbent's validation RMSE. Every run, promoted or refused, is recorded in a
 persistent leaderboard, and every promoted champion is written to a durable,
 versioned model registry.
 
-A \textbf{batch inference pipeline} loads the reigning champion from that
+A \textbf{hourly batch inference pipeline} loads the reigning champion from that
 registry, fetches each city's current pollution state and the coming four days of
 forecast weather, assembles one model input per future hour, predicts the whole
 72-hour curve, widens each point by the residual quantiles recorded for its
@@ -190,7 +190,7 @@ subsequently arrived so that realised error can be measured directly.
 
 A \textbf{delivery layer} serves the forecast document, the leaderboard, the
 evaluation results and the monitoring report through a typed HTTP API, presents
-them in a four-tab browser dashboard with an interactive map of Pakistan, and
+them in a five-tab browser dashboard with an interactive map of Pakistan, and
 exposes the same grounded data to a language-model advisor through a standard
 tool protocol~\cite{ref:mcp}.
 
@@ -349,7 +349,7 @@ D11 & What-if simulator & Live re-prediction under user-overridden drivers,
 presented as baseline versus scenario. \\
 D12 & Monitoring & Per-feature PSI drift with status thresholds, a forecast log,
 and realised error scored against observed outcomes. \\
-D13 & API and dashboard & A typed HTTP interface and a four-tab React
+D13 & API and dashboard & A typed HTTP interface and a five-tab React
 application with charting, cartography and alerting. \\
 D14 & Advisor and tool server & Four grounded tools exposed both to an in-app
 advisor and over the Model Context Protocol. \\

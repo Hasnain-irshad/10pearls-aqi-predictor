@@ -22,7 +22,7 @@ candidates, top-3 hired). The design goal was to go beyond "a model in a noteboo
 to a **self-operating ML product** with real MLOps discipline.
 
 **Live:**
-- Frontend (Vercel): https://web-kappa-one-69x94ncqyn.vercel.app
+- Frontend (Vercel): https://www.10pearlsaqi.me
 - Backend API (Railway): https://aqi-backend-production-5af4.up.railway.app
 
 ---
@@ -286,12 +286,13 @@ returns 503 in production because `ANTHROPIC_API_KEY` is not set on Railway.
 - **React (Vite)** SPA with a custom **"Aurora"** dark design system (glassmorphism,
   cyan→teal gradient accent chosen to complement the black-and-white 10Pearls logo,
   animated aurora background, 3D hover, animated intro/splash, round logo badge).
-- **Four tabs:** **Forecast** (city selector, current-AQI card, 72-h/daily chart with
+- **Five tabs:** **Forecast** (city selector, current-AQI card, 72-h/daily chart with
   prediction-interval band, Pakistan **map** (react-leaflet) coloured by AQI, legend,
   alert banner, SHAP explanation card, chat advisor), **Model Evaluation**
-  (leaderboard table + per-horizon line chart + walk-forward table), **Monitoring**
-  (PSI drift table + forecast-error/biggest-misses), **What-If** (driver sliders →
-  baseline-vs-scenario).
+  (leaderboard table + per-horizon line chart + walk-forward table), **Analytics & SHAP**
+  (global feature importance, distributions, category breakdown, city ranking, seasonal
+  and diurnal charts, and a correlation heatmap), **Monitoring** (PSI drift table +
+  forecast-error/biggest-misses), **What-If** (driver sliders → baseline-vs-scenario).
 - Charts: **Recharts**; responsive; theme-consistent.
 - **Static-mode fallback:** when no backend URL is configured, the app reads
   committed JSON snapshots (`/data/*.json`) so it can run as a pure static site
@@ -423,7 +424,7 @@ XGBoost (Extreme Gradient Boosting) · US EPA AQI (the AQI standard used).
 - Prediction interval: **80%** (10th/90th residual quantiles)
 - Schedules: feature **hourly** (`5 * * * *`), training **daily** (`30 2 * * *`)
 - Registry model: **`aqi_global_forecaster`**; feature group **`aqi_features` v2**
-- Live: frontend `web-kappa-one-69x94ncqyn.vercel.app`, backend
+- Live: frontend `www.10pearlsaqi.me`, backend
   `aqi-backend-production-5af4.up.railway.app`
 
 ---
@@ -437,5 +438,5 @@ XGBoost (Extreme Gradient Boosting) · US EPA AQI (the AQI standard used).
 - **Skip** all university front-matter (supervisor, certificate, declaration,
   dedication) — the title page carries only the 10Pearls logo, the project title and
   **Submitted by: Hasnain Irshad**.
-- The delivered thesis lives in **`Thesis/`** (127 pages, 35 figures, 23 tables,
+- The delivered thesis lives in **`Thesis/`** (131 pages, 35 figures, 23 tables,
   44 references). `Thesis_LaTeX/` was the reference sample.

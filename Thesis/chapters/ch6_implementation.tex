@@ -247,7 +247,12 @@ hour would produce a row whose 24-hour features were all missing. The resulting
 overlap with data already stored is not a problem, because the write is an upsert
 on the composite key: re-running the pipeline, or running it twice in the same
 hour, cannot create a duplicate row. Idempotence of this kind is what allows the
-recovery strategy for every failure in this system to be ``run it again''.
+recovery strategy for every failure in this system to be ``run it again''. After
+the feature-store write, the hourly GitHub Actions workflow also runs batch
+inference, commits the refreshed \texttt{predictions.json}, and pushes it to the
+repository. This publication step makes the hourly observation refresh visible
+to the public dashboard rather than leaving the website dependent on the separate
+daily training job.
 
 \section{The Backfill Pipeline}
 The backfill runs the same feature logic over the full history. It is triggered

@@ -70,8 +70,8 @@ need no secret for ingestion, which removes an entire class of operational
 failure.
 
 The \textbf{compute plane} consists of scheduled, ephemeral jobs: the hourly
-feature pipeline, the daily training pipeline, the batch inference pipeline that
-follows it, the evaluation and monitoring steps, and a manually triggered
+feature pipeline followed by hourly batch inference and forecast publication, the
+daily training pipeline with evaluation and monitoring steps, and a manually triggered
 backfill. None of them holds state between runs.
 
 The \textbf{state plane} is a managed feature store and model registry. The
@@ -151,7 +151,7 @@ asked from an external client cannot disagree.
 Figure~\ref{fig:datadesign} specifies the data design.
 
 \fig{data-design}{1.0}{Data design: the feature group and its keys, the two
-interchangeable storage backends, the four published documents, and the structure
+interchangeable storage backends, the published documents, and the structure
 of the forecast payload.}{fig:datadesign}
 
 \subsection{The Feature Group}
@@ -186,9 +186,11 @@ where the managed client cannot be installed, and it means the choice of vendor
 is confined to a single module.
 
 \subsection{Published Documents}
-The pipelines publish four documents, which are committed to the repository each
-night and are the only things the serving layer reads: the forecast payload, the
-evaluation report, the monitoring report and the leaderboard. Publishing them as
+The pipelines publish forecast, evaluation, monitoring, leaderboard, statistics
+and global-SHAP documents. Forecasts are committed hourly; evaluation, monitoring
+and leaderboard artefacts are refreshed by the daily workflow. These documents are
+the only things the serving layer reads: the forecast payload, the evaluation
+report, the monitoring report, the leaderboard and the analytics snapshots. Publishing them as
 committed files rather than as a live query is what allows the deployed backend
 to omit the feature-store dependency entirely, and what guarantees that a page
 view never waits for a model.
@@ -546,7 +548,7 @@ container-hosted API, the statically hosted frontend, and the two serving
 modes.}{fig:deployment}
 
 Four nodes participate. The \textbf{repository} holds the source and, uniquely,
-the published documents and the model bundle, which the nightly workflow commits
+the published documents and the model bundle, which the hourly and daily workflows commit
 back to it. The \textbf{runners} execute the pipelines and are the only nodes that
 ever contact the feature store. The \textbf{container host} runs the API from a
 deliberately slim image that omits the feature-store and deep-learning
@@ -571,12 +573,13 @@ temporal leakage, gated promotion, subordination of auxiliary capability, and
 publication of the system's own working. It presented the three-plane
 Feature-Training-Inference architecture and the alternatives rejected in
 reaching it, decomposed the package into layers, and specified the data design
-around a single upsert-keyed feature group and four published documents. It
+around a single upsert-keyed feature group and published forecast, evaluation,
+monitoring, statistics and SHAP documents. It
 reported the exploratory analysis that motivated the cyclical encodings, the
 non-linear model class, the empirical interval construction and the drift
 monitoring. It then developed the four decisions that define the system: the
 leakage-controlled feature representation, the horizon-as-feature formulation,
 per-horizon empirical intervals, and the promotion gate. Finally it specified the
-HTTP interface, the layered error-handling strategy and the deployment topology
+HTTP interface, the analytics snapshot fallback, the layered error-handling strategy and the deployment topology
 with its two serving modes. The next chapter describes how this design was
 implemented.

@@ -3,7 +3,7 @@
 The complete, ready-to-compile LaTeX thesis for the **Pearls AQI Predictor**,
 formatted to the same specification as the reference sample, with **35 numbered
 figures** (24 images + 11 captioned code excerpts) and **23 tables**. The
-compiled output is `main.pdf` — 127 pages, of which 117 are the numbered body.
+compiled output is `main.pdf` — 131 pages in the current build.
 
 Institutional front matter (group members, supervisor, certificate, declaration,
 dedication, acknowledgement, university branding) is **deliberately omitted**.
@@ -150,11 +150,23 @@ written by hand:
 If the pipelines are re-run and these files change, the corresponding tables in
 Chapters 5 and 8 should be updated to match.
 
-## 8. Keep this folder in version control
+## 8. Submission checklist
+
+Before submitting the complete project directory:
+
+1. Compile `main.tex` and confirm that `main.pdf` opens correctly.
+2. Include the root `README.md`, this thesis source folder, `docs/`, `tests/`,
+	`src/`, `web/`, the workflow files and the committed published snapshots.
+3. Confirm that the report describes the final five-tab dashboard: Forecast,
+	Analytics & SHAP, Model Evaluation, Monitoring and What-If.
+4. Check that the live links in the root README still resolve and that the
+	deployment timestamp shown by the dashboard is recent.
+
+## 9. Keep this folder in version control
 
 This folder is **not** currently tracked by git. Because it is untracked, a
 `git clean -fd` in the repository root deletes it entirely and it cannot be
-recovered. Commit it:
+recovered. Commit it together with the rest of the submission:
 
 ```bash
 git add Thesis && git commit -m "docs: project thesis (LaTeX sources + figures)"

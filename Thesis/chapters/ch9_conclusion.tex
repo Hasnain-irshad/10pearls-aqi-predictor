@@ -20,10 +20,13 @@ decays silently. The response developed here was not to build a better model but
 to build a system that keeps a model correct.
 
 The central architectural decision was to express the system as three decoupled
-Feature, Training and Inference pipelines communicating only through a managed
-feature store and model registry. Because all durable state lives in those two
-services, the compute can be entirely disposable, and because the compute is
-disposable it can be free. The central modelling decision was to treat the
+Feature, Training and Inference pipelines communicating through a managed
+feature store, model registry and committed published forecast documents. The
+hourly workflow now couples feature refresh to forecast publication by running
+inference and committing \texttt{predictions.json}; the daily workflow retrains,
+evaluates and monitors the system. Because durable state lives in those services
+and repository artefacts, the compute can be entirely disposable, and because the
+compute is disposable it can be free. The central modelling decision was to treat the
 forecast horizon as an input feature, so that one global model conditioned on
 location serves 22 cities and ten lead times rather than requiring 220 artefacts.
 The central operational decision was to gate promotion: a nightly retrain may
@@ -44,10 +47,10 @@ unit tests, one of which would fail if the per-city grouping were ever removed. 
 resumable backfill populated the store with roughly 697,000 hourly rows spanning
 January~2023 onward.
 
-\textbf{Objective 2 - Serverless pipeline architecture.} Three pipelines run on
-free scheduled runners: ingestion hourly, and training, inference, evaluation and
-monitoring nightly. They share no code path and communicate only through the
-feature store and the model registry. A model trained on one ephemeral runner is
+\textbf{Objective 2 - Serverless pipeline architecture.} Feature refresh and
+forecast publication run hourly on free scheduled runners, while training,
+evaluation and monitoring run daily. They communicate through the feature store,
+model registry and committed forecast documents. A model trained on one ephemeral runner is
 loaded by a different job on a different machine, which is the property on which
 the whole architecture rests and which was verified directly.
 
@@ -75,11 +78,11 @@ labelled explicitly as a model simulation; and the system monitors seven feature
 for distributional drift by Population Stability Index while separately logging
 every forecast and scoring it against the air quality that subsequently arrived.
 
-\textbf{Objective 6 - Delivery.} A typed HTTP interface serves thirteen
-endpoints, twelve of which return their documented payload against the live
-deployment in between 0.72 and 1.51 seconds; a four-view browser dashboard
+\textbf{Objective 6 - Delivery.} A typed HTTP interface serves the documented
+endpoints; a five-view browser dashboard
 presents the forecast, the model's promotion history, its accuracy by horizon and
-its current drift status; and the same four grounded tools are exposed both to an
+its current drift status, together with global and per-city SHAP analytics and
+statistical charts; and the same four grounded tools are exposed both to an
 in-application advisor and over the Model Context Protocol.
 
 \section{Contributions}

@@ -1,6 +1,6 @@
 """Capture real screenshots of the deployed dashboard into ../figures/.
 
-The four tabs of the live application become Figures in Chapter 7. Run:
+The five tabs of the live application become Figures in Chapter 7. Run:
 
     python screenshots.py                     # uses the deployed URL
     python screenshots.py http://localhost:5173
