@@ -33,6 +33,7 @@ prediction-interval charts.
 |---|---|
 | **Dashboard** | **https://10pearlsaqi.me** |
 | **Backend API** | https://aqi-backend-production-5af4.up.railway.app |
+| **GitHub repository** | https://github.com/Hasnain-irshad/10pearls-aqi-predictor |
 | **Project report** | [`Thesis/main.pdf`](Thesis/main.pdf) — 131 pages, 35 figures, 23 tables |
 | **EDA notebook** | [`notebooks/eda.ipynb`](notebooks/eda.ipynb) — executed, with outputs |
 
@@ -50,6 +51,7 @@ actually protect health are made *in advance*: whether to keep a child indoors, 
 move outdoor work, whether an asthmatic should carry a mask.
 
 This project forecasts the **US EPA Air Quality Index up to 72 hours ahead for 22 cities**
+spanning every province plus Islamabad Capital Territory, Gilgit–Baltistan and Azad Jammu &
 Kashmir. More importantly, it is a **system rather than a model**: it ingests fresh data
 every hour, retrains every night, refuses to deploy a model that isn't measurably better,
 explains every prediction, and monitors its own drift and error — all on free
@@ -112,7 +114,6 @@ validation) — never randomly.
 | Model | RMSE | MAE | R² | |
 |---|---:|---:|---:|---|
 | **XGBoost** | **19.69** | **12.80** | **0.850** | ← promoted champion |
-  │       ├── App.jsx                  5 tabs: Forecast, Analytics & SHAP, Evaluation, Monitoring, What-If
 | Ridge regression | 22.85 | 16.01 | 0.797 | linear reference |
 | Persistence (baseline) | 25.27 | 15.71 | 0.752 | not eligible to ship |
 
@@ -244,7 +245,6 @@ python -m aqi.pipelines.backfill --start 2024-01-01   # load history (once)
 python -m aqi.pipelines.feature_pipeline              # hourly feature-store step
 python -m aqi.pipelines.inference                     # hourly forecast publication
 python -m aqi.pipelines.training_pipeline             # train + promotion gate
-python -m aqi.pipelines.inference                     # write predictions.json
 python -m aqi.models.evaluate                         # per-horizon + backtest
 python -m aqi.monitoring                              # drift + realised error
 python -m aqi.eda                                     # EDA figures
@@ -252,7 +252,7 @@ python -m aqi.eda                                     # EDA figures
 uvicorn aqi.api.main:app --reload --port 8000         # backend
 cd web && npm install && npm run dev                  # frontend → localhost:5173
 
-pytest -q                                             # 26 tests
+pytest -q                                             # test suite
 ```
 
 > **Windows note:** the `hopsworks` SDK cannot be installed on Windows (a transitive
