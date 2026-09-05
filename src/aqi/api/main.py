@@ -24,6 +24,8 @@ _PREDICTIONS = ("data/processed/predictions.json", PREDICTIONS_PATH)
 _EVALUATION = ("data/processed/evaluation.json", PROCESSED_DIR / "evaluation.json")
 _MONITORING = ("data/processed/monitoring.json", PROCESSED_DIR / "monitoring.json")
 _LEADERBOARD = ("models_local/leaderboard.json", MODELS_DIR / "leaderboard.json")
+_STATISTICS = ("data/processed/statistics.json", PROCESSED_DIR / "statistics.json")
+_SHAP_GLOBAL = ("data/processed/shap_global.json", PROCESSED_DIR / "shap_global.json")
 
 app = FastAPI(title="Pearls AQI Predictor API", version="0.1.0")
 
@@ -161,6 +163,58 @@ def explain(city: str):
     from aqi.tools import explain_prediction
 
     return explain_prediction(city)
+
+
+@app.get("/api/statistics")
+def statistics():
+    """Historical EDA & air-quality distributions for the Analytics dashboard."""
+    snap = published.load(*_STATISTICS)
+    if snap:
+        return snap
+    try:
+        from aqi.statistics import compute_all
+
+        return compute_all()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to compute statistics: {exc}")
+
+
+@app.get("/api/shap/global")
+def shap_global():
+    """Global feature importance (mean |SHAP| per feature)."""
+    snap = published.load(*_SHAP_GLOBAL)
+    if snap:
+        return snap
+    try:
+        from aqi.models.explain import global_importance, friendly
+
+        imp = global_importance(sample=1000)
+        return {
+            "model_name": "XGBoost Forecaster",
+            "features": [
+                {
+                    "feature": row["feature"],
+                    "label": friendly(row["feature"]),
+                    "importance": round(float(row["mean_abs_shap"]), 2),
+                }
+                for _, row in imp.iterrows()
+            ],
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to compute global SHAP: {exc}")
+
+
+@app.get("/api/shap/{city}")
+def shap_city(city: str):
+    """Detailed SHAP breakdown for a city's peak forecast hour."""
+    data = _load_predictions()
+    if city not in data.get("cities", {}):
+        raise HTTPException(status_code=404, detail=f"No forecast for '{city}'.")
+    c = data["cities"][city]
+    exp = c.get("explanation")
+    if not exp:
+        raise HTTPException(status_code=404, detail="No SHAP explanation available.")
+    return {"city": city, **exp}
 
 
 @app.get("/api/whatif/defaults")

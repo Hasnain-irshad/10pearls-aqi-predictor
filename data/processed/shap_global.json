@@ -1,0 +1,95 @@
+{
+  "model_name": "XGBoost Global Forecaster",
+  "features": [
+    {
+      "feature": "aqi_anchor",
+      "label": "current AQI",
+      "importance": 38.45
+    },
+    {
+      "feature": "pm2_5_anchor",
+      "label": "current PM2.5",
+      "importance": 24.18
+    },
+    {
+      "feature": "aqi_roll_mean_24h_anchor",
+      "label": "24h AQI trend",
+      "importance": 18.72
+    },
+    {
+      "feature": "temperature_2m",
+      "label": "temperature",
+      "importance": 14.36
+    },
+    {
+      "feature": "hour_sin",
+      "label": "time of day (sin)",
+      "importance": 12.85
+    },
+    {
+      "feature": "hour_cos",
+      "label": "time of day (cos)",
+      "importance": 11.24
+    },
+    {
+      "feature": "surface_pressure",
+      "label": "air pressure",
+      "importance": 9.68
+    },
+    {
+      "feature": "relative_humidity_2m",
+      "label": "humidity",
+      "importance": 8.92
+    },
+    {
+      "feature": "month_sin",
+      "label": "season (sin)",
+      "importance": 8.15
+    },
+    {
+      "feature": "wind_speed_10m",
+      "label": "wind speed",
+      "importance": 7.42
+    },
+    {
+      "feature": "month_cos",
+      "label": "season (cos)",
+      "importance": 6.84
+    },
+    {
+      "feature": "pm10_anchor",
+      "label": "current PM10",
+      "importance": 5.91
+    },
+    {
+      "feature": "aqi_roll_mean_6h_anchor",
+      "label": "6h AQI trend",
+      "importance": 5.33
+    },
+    {
+      "feature": "apparent_temperature",
+      "label": "feels-like temp",
+      "importance": 4.67
+    },
+    {
+      "feature": "dew_point_2m",
+      "label": "dew point",
+      "importance": 3.89
+    },
+    {
+      "feature": "wind_gusts_10m",
+      "label": "wind gusts",
+      "importance": 3.12
+    },
+    {
+      "feature": "cloud_cover",
+      "label": "cloud cover",
+      "importance": 2.45
+    },
+    {
+      "feature": "precipitation",
+      "label": "rain",
+      "importance": 1.98
+    }
+  ]
+}

@@ -43,6 +43,10 @@ export const api = {
     return { champion: champs[champs.length - 1] || null, entries };
   },
   categories: () => (STATIC_MODE ? getStatic("categories.json") : get("/api/categories")),
+  // Analytics & SHAP — available in both modes (static JSON fallback).
+  statistics: () => (STATIC_MODE ? getStatic("statistics.json") : get("/api/statistics")),
+  shapGlobal: () => (STATIC_MODE ? getStatic("shap_global.json") : get("/api/shap/global")),
+  shapCity: (city) => (STATIC_MODE ? NO_BACKEND() : get(`/api/shap/${encodeURIComponent(city)}`)),
   // Live-compute features — unavailable in static mode (UI hides them).
   chat: (question, history) => (STATIC_MODE ? NO_BACKEND() : post("/api/chat", { question, history })),
   explain: (city) => (STATIC_MODE ? NO_BACKEND() : get(`/api/explain/${encodeURIComponent(city)}`)),

@@ -16,6 +16,8 @@ const files = [
   ["data/processed/evaluation.json", "evaluation.json"],
   ["data/processed/monitoring.json", "monitoring.json"],
   ["models_local/leaderboard.json", "leaderboard.json"],
+  ["data/processed/statistics.json", "statistics.json"],
+  ["data/processed/shap_global.json", "shap_global.json"],
 ];
 
 for (const [src, dst] of files) {

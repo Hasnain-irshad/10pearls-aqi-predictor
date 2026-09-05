@@ -56,6 +56,8 @@ reference/
 !data/processed/predictions.json
 !data/processed/evaluation.json
 !data/processed/monitoring.json
+!data/processed/statistics.json
+!data/processed/shap_global.json
 !models_local/leaderboard.json
 !models_local/aqi_model.joblib
 !models_local/aqi_model_meta.json

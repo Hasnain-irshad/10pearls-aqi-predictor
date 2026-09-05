@@ -9,6 +9,7 @@ import PakistanMap from "./components/PakistanMap.jsx";
 import Legend from "./components/Legend.jsx";
 import ChatPanel from "./components/ChatPanel.jsx";
 import ExplanationCard from "./components/ExplanationCard.jsx";
+import AnalyticsPage from "./pages/AnalyticsPage.jsx";
 import ModelEvalPage from "./pages/ModelEvalPage.jsx";
 import MonitoringPage from "./pages/MonitoringPage.jsx";
 import WhatIfPage from "./pages/WhatIfPage.jsx";
@@ -18,6 +19,7 @@ const SPLASH_MIN_MS = 2200; // minimum time the intro animation stays on screen
 
 const TABS = [
   { id: "forecast", label: "🌫️ Forecast" },
+  { id: "analytics", label: "📊 Analytics & SHAP" },
   { id: "eval", label: "🏆 Model Evaluation" },
   { id: "monitoring", label: "🌊 Monitoring" },
   // What-If needs the live backend; hidden in the static demo.
@@ -119,6 +121,7 @@ export default function App() {
       )}
 
       {/* ---- Other tabs ---- */}
+      {data && tab === "analytics" && <AnalyticsPage />}
       {data && tab === "eval" && <ModelEvalPage />}
       {data && tab === "monitoring" && <MonitoringPage />}
       {data && tab === "whatif" && (

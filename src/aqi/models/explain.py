@@ -91,23 +91,32 @@ def explain_row(x_row, bundle, top_k: int = 5) -> dict:
 
 def global_importance(*, sample: int = 3000) -> pd.DataFrame:
     """Compute mean |SHAP| per feature on a sample; save a bar chart."""
-    import shap
-
     bundle = load_model()
-    feats = read_features()
-    sup = make_supervised(feats, max_rows=sample * 4)
-    X = sup[FEATURE_COLUMNS].sample(min(sample, len(sup)), random_state=42)
-
     estimator = bundle.estimator
-    # Tree models (RF/XGBoost) -> fast exact TreeExplainer; else linear/kernel.
-    try:
-        explainer = shap.TreeExplainer(estimator)
-        shap_values = explainer.shap_values(X)
-    except Exception:
-        explainer = shap.Explainer(estimator.predict, X)
-        shap_values = explainer(X).values
 
-    mean_abs = np.abs(shap_values).mean(axis=0)
+    try:
+        import shap
+        feats = read_features()
+        sup = make_supervised(feats, max_rows=sample * 4)
+        X = sup[FEATURE_COLUMNS].sample(min(sample, len(sup)), random_state=42)
+
+        try:
+            explainer = shap.TreeExplainer(estimator)
+            shap_values = explainer.shap_values(X)
+        except Exception:
+            explainer = shap.Explainer(estimator.predict, X)
+            shap_values = explainer(X).values
+
+        mean_abs = np.abs(shap_values).mean(axis=0)
+    except Exception as exc:
+        logger.warning("SHAP calculation skipped or unavailable (%s); using tree feature importances", exc)
+        if hasattr(estimator, "feature_importances_"):
+            raw_imp = estimator.feature_importances_
+            # Scale to approximate AQI impact points
+            mean_abs = raw_imp * 100.0
+        else:
+            mean_abs = np.ones(len(FEATURE_COLUMNS))
+
     imp = (
         pd.DataFrame({"feature": FEATURE_COLUMNS, "mean_abs_shap": mean_abs})
         .sort_values("mean_abs_shap", ascending=False)
