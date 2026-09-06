@@ -322,6 +322,8 @@ carries any cost.
 | [`docs/monitoring.md`](docs/monitoring.md) | Drift report |
 | [`docs/lstm_metrics.md`](docs/lstm_metrics.md) | Deep-learning comparison |
 | [`docs/RUNNING.md`](docs/RUNNING.md) | Local run guide |
+| [`docs/interview-prep.md`](docs/interview-prep.md) | Complete interview preparation guide |
+| [`docs/Pearls_AQI_Predictor_Interview_Preparation.pdf`](docs/Pearls_AQI_Predictor_Interview_Preparation.pdf) | Printable interview preparation guide |
 
 ---
 
