@@ -6,6 +6,7 @@ A challenger is promoted only if it beats the champion's validation RMSE.
 
 | Ver | Trained | Model | RMSE | MAE | R² | Result |
 |---:|---|---|---:|---:|---:|---|
+| 79 | 2026-11-20T10:14 | XGBoost | 19.687 | 12.804 | 0.85 | rejected |
 | 78 | 2026-11-19T10:34 | XGBoost | 19.687 | 12.804 | 0.85 | rejected |
 | 77 | 2026-11-18T10:25 | XGBoost | 19.687 | 12.804 | 0.85 | rejected |
 | 76 | 2026-11-17T10:55 | XGBoost | 19.687 | 12.804 | 0.85 | rejected |
